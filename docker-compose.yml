@@ -96,7 +96,55 @@ services:
     networks:
       - bank-transfer-network
 
-  # Kafka UI: Web interface for Kafka
+  # Sample Data Initialization
+  init-sample-data:
+    image: amazon/aws-cli:latest
+    container_name: init-sample-data
+    depends_on:
+      localstack:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Waiting for DynamoDB to be ready..."
+        sleep 10
+        
+        echo "Creating sample test accounts..."
+        
+        aws dynamodb put-item \
+          --table-name accounts \
+          --item '{"accountId": {"S": "acc-001"}, "balance": {"N": "5000.00"}, "currency": {"S": "BRL"}, "status": {"S": "ACTIVE"}, "customerName": {"S": "João Silva"}, "createdAt": {"S": "2026-08-27T21:00:00Z"}, "updatedAt": {"S": "2026-08-27T21:00:00Z"}}' \
+          --endpoint-url http://localstack:4566
+        
+        echo "✓ Account acc-001 created"
+        
+        aws dynamodb put-item \
+          --table-name accounts \
+          --item '{"accountId": {"S": "acc-002"}, "balance": {"N": "1000.00"}, "currency": {"S": "BRL"}, "status": {"S": "ACTIVE"}, "customerName": {"S": "Maria Santos"}, "createdAt": {"S": "2026-08-27T21:00:00Z"}, "updatedAt": {"S": "2026-08-27T21:00:00Z"}}' \
+          --endpoint-url http://localstack:4566
+        
+        echo "✓ Account acc-002 created"
+        
+        aws dynamodb put-item \
+          --table-name accounts \
+          --item '{"accountId": {"S": "acc-003"}, "balance": {"N": "3500.00"}, "currency": {"S": "BRL"}, "status": {"S": "ACTIVE"}, "customerName": {"S": "Pedro Costa"}, "createdAt": {"S": "2026-08-27T21:00:00Z"}, "updatedAt": {"S": "2026-08-27T21:00:00Z"}}' \
+          --endpoint-url http://localstack:4566
+        
+        echo "✓ Account acc-003 created"
+        
+        aws dynamodb put-item \
+          --table-name accounts \
+          --item '{"accountId": {"S": "acc-000"}, "balance": {"N": "0.00"}, "currency": {"S": "BRL"}, "status": {"S": "INACTIVE"}, "customerName": {"S": "Conta Encerrada"}, "createdAt": {"S": "2026-08-27T21:00:00Z"}, "updatedAt": {"S": "2026-08-27T21:00:00Z"}}' \
+          --endpoint-url http://localstack:4566
+        
+        echo "✓ Account acc-000 (inactive) created"
+        echo "✅ Sample data initialization complete!"
+    networks:
+      - bank-transfer-network
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: kafka-ui
