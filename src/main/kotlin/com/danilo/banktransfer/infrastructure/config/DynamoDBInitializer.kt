@@ -28,10 +28,13 @@ class DynamoDBInitializer(
     override fun run(args: ApplicationArguments?) {
         logger.info("Initializing DynamoDB tables...")
         
-        createAccountsTable()
-        createTransfersTable()
-        
-        logger.info("DynamoDB tables initialized successfully!")
+        try {
+            createAccountsTable()
+            createTransfersTable()
+            logger.info("DynamoDB tables initialized successfully!")
+        } catch (e: Exception) {
+            logger.warn("Failed to initialize DynamoDB tables: ${e.message}. Tables may already exist.", e)
+        }
     }
 
     private fun createAccountsTable() {
@@ -56,11 +59,7 @@ class DynamoDBInitializer(
             dynamoDbClient.createTable(request)
             logger.info("Table '$accountsTableName' created successfully")
         } catch (e: Exception) {
-            if (e is ResourceNotFoundException || e.message?.contains("ResourceInUseException") == true) {
-                logger.info("Table '$accountsTableName' already exists")
-            } else {
-                logger.error("Error creating table '$accountsTableName'", e)
-            }
+            logger.debug("Table '$accountsTableName' creation: ${e.message}")
         }
     }
 
@@ -94,11 +93,7 @@ class DynamoDBInitializer(
             dynamoDbClient.createTable(request)
             logger.info("Table '$transfersTableName' created successfully")
         } catch (e: Exception) {
-            if (e is ResourceNotFoundException || e.message?.contains("ResourceInUseException") == true) {
-                logger.info("Table '$transfersTableName' already exists")
-            } else {
-                logger.error("Error creating table '$transfersTableName'", e)
-            }
+            logger.debug("Table '$transfersTableName' creation: ${e.message}")
         }
     }
 }
