@@ -25,6 +25,9 @@ dependencies {
 	implementation("software.amazon.awssdk:dynamodb:2.25.0")
 	implementation("software.amazon.awssdk:dynamodb-enhanced:2.25.0")
 	
+	// AWS SQS
+	implementation("software.amazon.awssdk:sqs:2.25.0")
+	
 	// Kotlin
 	implementation("org.jetbrains.kotlin:kotlin-reflect")
 	implementation("org.jetbrains.kotlin:kotlin-stdlib")

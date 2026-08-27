@@ -10,7 +10,7 @@ import java.time.Instant
 object AccountMapper {
 
     fun toDynamoDBItem(account: Account): Map<String, AttributeValue> {
-        return mapOf(
+        return mutableMapOf(
             "accountId" to AttributeValue.builder().s(account.accountId).build(),
             "balance" to AttributeValue.builder().n(account.balance.toPlainString()).build(),
             "currency" to AttributeValue.builder().s(account.currency.name).build(),

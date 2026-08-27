@@ -12,9 +12,9 @@ import software.amazon.awssdk.services.dynamodb.model.KeySchemaElement
 import software.amazon.awssdk.services.dynamodb.model.KeyType
 import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException
 import software.amazon.awssdk.services.dynamodb.model.ScalarAttributeType
-import io.github.microutils.kotlin.logging.KotlinLogging
+import org.slf4j.LoggerFactory
 
-private val logger = KotlinLogging.logger {}
+private val logger = LoggerFactory.getLogger("DynamoDBInitializer")
 
 @Component
 class DynamoDBInitializer(
@@ -26,12 +26,12 @@ class DynamoDBInitializer(
 ) : ApplicationRunner {
 
     override fun run(args: ApplicationArguments?) {
-        logger.info { "Initializing DynamoDB tables..." }
+        logger.info("Initializing DynamoDB tables...")
         
         createAccountsTable()
         createTransfersTable()
         
-        logger.info { "DynamoDB tables initialized successfully!" }
+        logger.info("DynamoDB tables initialized successfully!")
     }
 
     private fun createAccountsTable() {
@@ -54,12 +54,12 @@ class DynamoDBInitializer(
                 .build()
 
             dynamoDbClient.createTable(request)
-            logger.info { "Table '$accountsTableName' created successfully" }
+            logger.info("Table '$accountsTableName' created successfully")
         } catch (e: Exception) {
             if (e is ResourceNotFoundException || e.message?.contains("ResourceInUseException") == true) {
-                logger.info { "Table '$accountsTableName' already exists" }
+                logger.info("Table '$accountsTableName' already exists")
             } else {
-                logger.error(e) { "Error creating table '$accountsTableName'" }
+                logger.error("Error creating table '$accountsTableName'", e)
             }
         }
     }
@@ -92,12 +92,12 @@ class DynamoDBInitializer(
                 .build()
 
             dynamoDbClient.createTable(request)
-            logger.info { "Table '$transfersTableName' created successfully" }
+            logger.info("Table '$transfersTableName' created successfully")
         } catch (e: Exception) {
             if (e is ResourceNotFoundException || e.message?.contains("ResourceInUseException") == true) {
-                logger.info { "Table '$transfersTableName' already exists" }
+                logger.info("Table '$transfersTableName' already exists")
             } else {
-                logger.error(e) { "Error creating table '$transfersTableName'" }
+                logger.error("Error creating table '$transfersTableName'", e)
             }
         }
     }

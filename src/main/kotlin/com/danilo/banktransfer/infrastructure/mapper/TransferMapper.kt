@@ -10,21 +10,23 @@ import java.time.Instant
 object TransferMapper {
 
     fun toDynamoDBItem(transfer: Transfer): Map<String, AttributeValue> {
-        return mapOf(
-            "transferId" to AttributeValue.builder().s(transfer.transferId).build(),
-            "requestedAt" to AttributeValue.builder().s(transfer.requestedAt.toString()).build(),
-            "sourceAccountId" to AttributeValue.builder().s(transfer.sourceAccountId).build(),
-            "destinationAccountId" to AttributeValue.builder().s(transfer.destinationAccountId).build(),
-            "amount" to AttributeValue.builder().n(transfer.amount.toPlainString()).build(),
-            "currency" to AttributeValue.builder().s(transfer.currency.name).build(),
-            "status" to AttributeValue.builder().s(transfer.status.name).build(),
-            "completedAt" to transfer.completedAt?.let { AttributeValue.builder().s(it.toString()).build() }
-                ?: AttributeValue.builder().nul(true).build(),
-            "failureReason" to transfer.failureReason?.let { AttributeValue.builder().s(it).build() }
-                ?: AttributeValue.builder().nul(true).build(),
-            "createdAt" to AttributeValue.builder().s(transfer.createdAt.toString()).build(),
-            "updatedAt" to AttributeValue.builder().s(transfer.updatedAt.toString()).build()
-        )
+        val item = mutableMapOf<String, AttributeValue>()
+        
+        item["transferId"] = AttributeValue.builder().s(transfer.transferId).build()
+        item["requestedAt"] = AttributeValue.builder().s(transfer.requestedAt.toString()).build()
+        item["sourceAccountId"] = AttributeValue.builder().s(transfer.sourceAccountId).build()
+        item["destinationAccountId"] = AttributeValue.builder().s(transfer.destinationAccountId).build()
+        item["amount"] = AttributeValue.builder().n(transfer.amount.toPlainString()).build()
+        item["currency"] = AttributeValue.builder().s(transfer.currency.name).build()
+        item["status"] = AttributeValue.builder().s(transfer.status.name).build()
+        item["completedAt"] = transfer.completedAt?.let { AttributeValue.builder().s(it.toString()).build() }
+            ?: AttributeValue.builder().nul(true).build()
+        item["failureReason"] = transfer.failureReason?.let { AttributeValue.builder().s(it).build() }
+            ?: AttributeValue.builder().nul(true).build()
+        item["createdAt"] = AttributeValue.builder().s(transfer.createdAt.toString()).build()
+        item["updatedAt"] = AttributeValue.builder().s(transfer.updatedAt.toString()).build()
+        
+        return item
     }
 
     fun fromDynamoDBItem(item: Map<String, AttributeValue>): Transfer {
