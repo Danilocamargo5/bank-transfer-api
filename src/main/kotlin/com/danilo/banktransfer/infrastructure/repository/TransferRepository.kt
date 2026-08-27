@@ -1,12 +1,14 @@
 package com.danilo.banktransfer.infrastructure.repository
 
 import com.danilo.banktransfer.domain.model.Transfer
+import com.danilo.banktransfer.domain.enums.TransferStatus
 import com.danilo.banktransfer.infrastructure.mapper.TransferMapper
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Repository
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest
+import software.amazon.awssdk.services.dynamodb.model.QueryRequest
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import java.util.Optional
 
@@ -40,5 +42,24 @@ class TransferRepository(
         } else {
             Optional.empty()
         }
+    }
+
+    fun findByTransferId(transferId: String): List<Transfer> {
+        val request = QueryRequest.builder()
+            .tableName(tableName)
+            .keyConditionExpression("transferId = :transferId")
+            .expressionAttributeValues(
+                mapOf(":transferId" to AttributeValue.builder().s(transferId).build())
+            )
+            .build()
+
+        val response = dynamoDbClient.query(request)
+
+        return response.items().map { TransferMapper.fromDynamoDBItem(it) }
+    }
+
+    fun hasCompletedTransfer(transferId: String): Boolean {
+        val transfers = findByTransferId(transferId)
+        return transfers.any { it.status == TransferStatus.COMPLETED || it.status == TransferStatus.FAILED }
     }
 }
