@@ -20,7 +20,7 @@ class KafkaConsumerConfig(
     @Bean
     fun consumerFactory(): ConsumerFactory<String, String> {
         val config = mutableMapOf<String, Any>()
-        config[ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG] = kafkaProperties.bootstrap.joinToString(",")
+        config[ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG] = "localhost:9092"
         config[ConsumerConfig.GROUP_ID_CONFIG] = "bank-transfer-api"
         config[ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG] = StringDeserializer::class.java
         config[ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG] = StringDeserializer::class.java
@@ -35,7 +35,6 @@ class KafkaConsumerConfig(
     fun kafkaListenerContainerFactory(): ConcurrentKafkaListenerContainerFactory<String, String> {
         val factory = ConcurrentKafkaListenerContainerFactory<String, String>()
         factory.consumerFactory = consumerFactory()
-        factory.concurrency = 3
         factory.containerProperties.ackMode = ContainerProperties.AckMode.MANUAL_IMMEDIATE
 
         return factory

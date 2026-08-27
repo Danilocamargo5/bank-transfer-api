@@ -5,12 +5,13 @@ import com.danilo.banktransfer.domain.model.TransferRequestedEvent
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
 import org.springframework.kafka.annotation.KafkaListener
+import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.stereotype.Service
 
 @Service
 class TransferKafkaConsumer(
     private val transferService: TransferService,
-    private val kafkaProducer: TransferKafkaProducer,
+    private val kafkaTemplate: KafkaTemplate<String, String>,
     private val sqsPublisher: TransferSqsPublisher,
     private val objectMapper: ObjectMapper
 ) {
@@ -32,7 +33,8 @@ class TransferKafkaConsumer(
             when (result) {
                 is TransferService.Result.Success -> {
                     logger.info("Transfer ${event.transferId} completed, publishing to kafka")
-                    kafkaProducer.publishTransferCompleted(result.event)
+                    val completedMessage = objectMapper.writeValueAsString(result.event)
+                    kafkaTemplate.send("transfer-completed", result.event.transferId, completedMessage)
                 }
                 is TransferService.Result.Failure -> {
                     logger.warn("Transfer ${event.transferId} failed, sending to SQS")

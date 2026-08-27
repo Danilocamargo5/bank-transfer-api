@@ -29,12 +29,10 @@ class TransferSqsPublisher(
             val request = SendMessageRequest.builder()
                 .queueUrl(queueUrl)
                 .messageBody(message)
-                .messageGroupId(event.transferId)  // For FIFO ordering
-                .deduplicationId(event.transferId) // For idempotence
                 .build()
 
-            val response = sqsClient.sendMessage(request)
-            logger.info("Published transfer-failed event to SQS for transferId: ${event.transferId}, messageId: ${response.messageId()}")
+            sqsClient.sendMessage(request)
+            logger.info("Published transfer-failed event to SQS for transferId: ${event.transferId}")
         } catch (e: Exception) {
             logger.error("Error publishing transfer-failed event to SQS: ${e.message}", e)
             throw e
