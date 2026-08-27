@@ -139,18 +139,20 @@ aws apigateway put-method-response \
     --rest-api-id $API_ID \
     --resource-id $TRANSFERS_RESOURCE \
     --http-method POST \
-    --status-code 202 \
+    --status-code 200 \
+    --response-models '{"application/json":"Empty"}' \
     --endpoint-url $ENDPOINT \
     --region $REGION > /dev/null
 
 echo "✓ Method response created"
 
-# Create integration response
+# Create integration response with template mapping
 aws apigateway put-integration-response \
     --rest-api-id $API_ID \
     --resource-id $TRANSFERS_RESOURCE \
     --http-method POST \
-    --status-code 202 \
+    --status-code 200 \
+    --response-templates '{"application/json": "$input.json($)"}' \
     --endpoint-url $ENDPOINT \
     --region $REGION > /dev/null
 
@@ -182,6 +184,27 @@ aws apigateway put-integration \
 
 echo "✓ GET integration created"
 
+# Create method response for GET
+aws apigateway put-method-response \
+    --rest-api-id $API_ID \
+    --resource-id $TRANSFER_ID_RESOURCE \
+    --http-method GET \
+    --status-code 200 \
+    --endpoint-url $ENDPOINT \
+    --region $REGION > /dev/null
+
+# Create integration response for GET with template
+aws apigateway put-integration-response \
+    --rest-api-id $API_ID \
+    --resource-id $TRANSFER_ID_RESOURCE \
+    --http-method GET \
+    --status-code 200 \
+    --response-templates '{"application/json": "$input.json($)"}' \
+    --endpoint-url $ENDPOINT \
+    --region $REGION > /dev/null
+
+echo "✓ GET integration response created"
+
 # Create GET method on /api/v1/accounts/{accountId}
 echo "Creating GET method on /api/v1/accounts/{accountId}"
 aws apigateway put-method \
@@ -207,6 +230,27 @@ aws apigateway put-integration \
     --region $REGION > /dev/null
 
 echo "✓ GET integration created"
+
+# Create method response for GET
+aws apigateway put-method-response \
+    --rest-api-id $API_ID \
+    --resource-id $ACCOUNT_ID_RESOURCE \
+    --http-method GET \
+    --status-code 200 \
+    --endpoint-url $ENDPOINT \
+    --region $REGION > /dev/null
+
+# Create integration response for GET with template
+aws apigateway put-integration-response \
+    --rest-api-id $API_ID \
+    --resource-id $ACCOUNT_ID_RESOURCE \
+    --http-method GET \
+    --status-code 200 \
+    --response-templates '{"application/json": "$input.json($)"}' \
+    --endpoint-url $ENDPOINT \
+    --region $REGION > /dev/null
+
+echo "✓ GET integration response created"
 
 # Deploy API
 echo "Deploying API to stage: $STAGE"

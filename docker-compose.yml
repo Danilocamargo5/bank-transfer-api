@@ -278,7 +278,8 @@ services:
           --rest-api-id $$API_ID \
           --resource-id $$TRANSFERS_RESOURCE \
           --http-method POST \
-          --status-code 202 \
+          --status-code 200 \
+          --response-models '{"application/json":"Empty"}' \
           --endpoint-url http://localstack:4566 \
           --region us-east-1 > /dev/null
         
@@ -286,7 +287,8 @@ services:
           --rest-api-id $$API_ID \
           --resource-id $$TRANSFERS_RESOURCE \
           --http-method POST \
-          --status-code 202 \
+          --status-code 200 \
+          --response-templates '{"application/json": "$input.json($$)"}' \
           --endpoint-url http://localstack:4566 \
           --region us-east-1 > /dev/null
         
