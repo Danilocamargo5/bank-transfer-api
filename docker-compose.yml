@@ -280,6 +280,7 @@ services:
           --http-method POST \
           --status-code 200 \
           --response-models '{"application/json":"Empty"}' \
+          --response-parameters '{"method.response.header.Content-Type": true}' \
           --endpoint-url http://localstack:4566 \
           --region us-east-1 > /dev/null
         
@@ -289,6 +290,7 @@ services:
           --http-method POST \
           --status-code 200 \
           --response-templates '{"application/json": "$input.json($$)"}' \
+          --response-parameters '{"method.response.header.Content-Type": "integration.response.header.Content-Type"}' \
           --endpoint-url http://localstack:4566 \
           --region us-east-1 > /dev/null
         

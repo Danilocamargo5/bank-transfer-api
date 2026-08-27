@@ -141,18 +141,20 @@ aws apigateway put-method-response \
     --http-method POST \
     --status-code 200 \
     --response-models '{"application/json":"Empty"}' \
+    --response-parameters '{"method.response.header.Content-Type": true}' \
     --endpoint-url $ENDPOINT \
     --region $REGION > /dev/null
 
 echo "✓ Method response created"
 
-# Create integration response with template mapping
+# Create integration response with template mapping and header mapping
 aws apigateway put-integration-response \
     --rest-api-id $API_ID \
     --resource-id $TRANSFERS_RESOURCE \
     --http-method POST \
     --status-code 200 \
     --response-templates '{"application/json": "$input.json($)"}' \
+    --response-parameters '{"method.response.header.Content-Type": "integration.response.header.Content-Type"}' \
     --endpoint-url $ENDPOINT \
     --region $REGION > /dev/null
 
@@ -190,16 +192,18 @@ aws apigateway put-method-response \
     --resource-id $TRANSFER_ID_RESOURCE \
     --http-method GET \
     --status-code 200 \
+    --response-parameters '{"method.response.header.Content-Type": true}' \
     --endpoint-url $ENDPOINT \
     --region $REGION > /dev/null
 
-# Create integration response for GET with template
+# Create integration response for GET with template and header mapping
 aws apigateway put-integration-response \
     --rest-api-id $API_ID \
     --resource-id $TRANSFER_ID_RESOURCE \
     --http-method GET \
     --status-code 200 \
     --response-templates '{"application/json": "$input.json($)"}' \
+    --response-parameters '{"method.response.header.Content-Type": "integration.response.header.Content-Type"}' \
     --endpoint-url $ENDPOINT \
     --region $REGION > /dev/null
 
@@ -237,16 +241,18 @@ aws apigateway put-method-response \
     --resource-id $ACCOUNT_ID_RESOURCE \
     --http-method GET \
     --status-code 200 \
+    --response-parameters '{"method.response.header.Content-Type": true}' \
     --endpoint-url $ENDPOINT \
     --region $REGION > /dev/null
 
-# Create integration response for GET with template
+# Create integration response for GET with template and header mapping
 aws apigateway put-integration-response \
     --rest-api-id $API_ID \
     --resource-id $ACCOUNT_ID_RESOURCE \
     --http-method GET \
     --status-code 200 \
     --response-templates '{"application/json": "$input.json($)"}' \
+    --response-parameters '{"method.response.header.Content-Type": "integration.response.header.Content-Type"}' \
     --endpoint-url $ENDPOINT \
     --region $REGION > /dev/null
 
