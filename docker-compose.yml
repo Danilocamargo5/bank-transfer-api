@@ -152,39 +152,6 @@ services:
         echo "✅ Sample data initialization complete!"
     networks:
       - bank-transfer-network
-
-  # Spring Boot Application
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: bank-transfer-api
-    ports:
-      - "8080:8080"
-    depends_on:
-      localstack:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-      init-sample-data:
-        condition: service_completed_successfully
-    environment:
-      AWS_ENDPOINT_URL: http://localstack:4566
-      AWS_REGION: us-east-1
-      AWS_ACCESS_KEY_ID: local
-      AWS_SECRET_ACCESS_KEY: local
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      SPRING_APPLICATION_NAME: bank-transfer-api
-    networks:
-      - bank-transfer-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
-
-  # Kafka UI: Web interface for Kafka
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: kafka-ui
