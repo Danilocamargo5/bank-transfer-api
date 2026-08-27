@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # LocalStack: AWS services emulation (DynamoDB, SQS, API Gateway) - v4.14.0 (last free version)
   localstack:
