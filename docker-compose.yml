@@ -14,8 +14,8 @@ services:
       AWS_ACCESS_KEY_ID: local
       AWS_SECRET_ACCESS_KEY: local
       AWS_DEFAULT_REGION: us-east-1
-      DYNAMODB_SHARE_DB: "true"
-      DYNAMODB_STREAM_SPEC: "true"
+      DYNAMODB_SHARE_DB: "1"
+      DYNAMODB_STREAM_SPEC: "1"
     volumes:
       - "${TMPDIR:-.}/.localstack:/tmp/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
