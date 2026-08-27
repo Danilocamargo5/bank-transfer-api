@@ -195,6 +195,116 @@ services:
   #     timeout: 5s
   #     retries: 5
 
+  # API Gateway Initialization
+  init-api-gateway:
+    image: amazon/aws-cli:latest
+    container_name: init-api-gateway
+    depends_on:
+      localstack:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Waiting for API Gateway to be ready..."
+        sleep 10
+        
+        echo "Creating API Gateway REST API..."
+        API_ID=$$(aws apigateway create-rest-api \
+          --name "bank-transfer-api" \
+          --description "Bank Transfer API Gateway" \
+          --endpoint-url http://localstack:4566 \
+          --region us-east-1 \
+          --query 'id' \
+          --output text)
+        
+        echo "✓ API created with ID: $$API_ID"
+        
+        ROOT_ID=$$(aws apigateway get-resources \
+          --rest-api-id $$API_ID \
+          --endpoint-url http://localstack:4566 \
+          --region us-east-1 \
+          --query 'items[0].id' \
+          --output text)
+        
+        API_RESOURCE=$$(aws apigateway create-resource \
+          --rest-api-id $$API_ID \
+          --parent-id $$ROOT_ID \
+          --path-part "api" \
+          --endpoint-url http://localstack:4566 \
+          --region us-east-1 \
+          --query 'id' \
+          --output text)
+        
+        V1_RESOURCE=$$(aws apigateway create-resource \
+          --rest-api-id $$API_ID \
+          --parent-id $$API_RESOURCE \
+          --path-part "v1" \
+          --endpoint-url http://localstack:4566 \
+          --region us-east-1 \
+          --query 'id' \
+          --output text)
+        
+        TRANSFERS_RESOURCE=$$(aws apigateway create-resource \
+          --rest-api-id $$API_ID \
+          --parent-id $$V1_RESOURCE \
+          --path-part "transfers" \
+          --endpoint-url http://localstack:4566 \
+          --region us-east-1 \
+          --query 'id' \
+          --output text)
+        
+        aws apigateway put-method \
+          --rest-api-id $$API_ID \
+          --resource-id $$TRANSFERS_RESOURCE \
+          --http-method POST \
+          --authorization-type NONE \
+          --endpoint-url http://localstack:4566 \
+          --region us-east-1 > /dev/null
+        
+        aws apigateway put-integration \
+          --rest-api-id $$API_ID \
+          --resource-id $$TRANSFERS_RESOURCE \
+          --http-method POST \
+          --type HTTP \
+          --integration-http-method POST \
+          --uri "http://host.docker.internal:8080/api/v1/transfers" \
+          --endpoint-url http://localstack:4566 \
+          --region us-east-1 > /dev/null
+        
+        aws apigateway put-method-response \
+          --rest-api-id $$API_ID \
+          --resource-id $$TRANSFERS_RESOURCE \
+          --http-method POST \
+          --status-code 202 \
+          --endpoint-url http://localstack:4566 \
+          --region us-east-1 > /dev/null
+        
+        aws apigateway put-integration-response \
+          --rest-api-id $$API_ID \
+          --resource-id $$TRANSFERS_RESOURCE \
+          --http-method POST \
+          --status-code 202 \
+          --endpoint-url http://localstack:4566 \
+          --region us-east-1 > /dev/null
+        
+        DEPLOYMENT_ID=$$(aws apigateway create-deployment \
+          --rest-api-id $$API_ID \
+          --stage-name dev \
+          --endpoint-url http://localstack:4566 \
+          --region us-east-1 \
+          --query 'id' \
+          --output text)
+        
+        echo "✓ Deployment created: $$DEPLOYMENT_ID"
+        echo "✅ API Gateway setup complete!"
+        echo "API Endpoint: http://localhost:4566/restapis/$$API_ID/dev/api/v1/transfers"
+    networks:
+      - bank-transfer-network
+
 networks:
   bank-transfer-network:
     driver: bridge
