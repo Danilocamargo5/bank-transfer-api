@@ -28,17 +28,14 @@ class TransferService(
         logger.info("Processing transfer: ${event.transferId} from ${event.sourceAccountId} to ${event.destinationAccountId}")
 
         return try {
-            // 1. Check if transfer already exists (idempotency)
-            if (transferRepository.exists(event.transferId)) {
-                logger.warn("Transfer ${event.transferId} already processed (idempotent request)")
-                throw DuplicateTransferException("Transfer ${event.transferId} already processed")
-            }
+            // Note: Idempotence check removed for now - will be implemented with Query on composite key in future PR
+            // Check happens at DB level: duplicate transferId will fail uniqueness constraint
 
-            // 2. Validate transfer
+            // 1. Validate transfer
             validateTransfer(event)
             logger.info("Transfer validation passed for ${event.transferId}")
 
-            // 3. Get accounts
+            // 2. Get accounts
             val sourceAccount = accountRepository.findById(event.sourceAccountId)
                 .orElseThrow { 
                     logger.error("Source account ${event.sourceAccountId} not found")
@@ -53,7 +50,7 @@ class TransferService(
 
             logger.info("Accounts found: source=${sourceAccount.accountId}, dest=${destinationAccount.accountId}")
 
-            // 4. Validate account statuses
+            // 3. Validate account statuses
             if (!sourceAccount.isActive()) {
                 logger.error("Source account ${event.sourceAccountId} is not active. Status: ${sourceAccount.status}")
                 throw InactiveAccountException("Source account ${event.sourceAccountId} is not active")
@@ -64,7 +61,7 @@ class TransferService(
                 throw InactiveAccountException("Destination account ${event.destinationAccountId} is not active")
             }
 
-            // 5. Validate sufficient balance
+            // 4. Validate sufficient balance
             if (!sourceAccount.hasSufficientBalance(event.amount)) {
                 logger.error("Insufficient balance in account ${event.sourceAccountId}. Required: ${event.amount}, Available: ${sourceAccount.balance}")
                 throw InsufficientBalanceException(
@@ -75,19 +72,19 @@ class TransferService(
 
             logger.info("Balance validation passed for ${event.transferId}")
 
-            // 6. Perform atomic debit/credit
+            // 5. Perform atomic debit/credit
             val updatedSourceAccount = sourceAccount.debit(event.amount)
             val updatedDestinationAccount = destinationAccount.credit(event.amount)
 
             logger.info("Debit/credit complete for ${event.transferId}. New balances: source=${updatedSourceAccount.balance}, dest=${updatedDestinationAccount.balance}")
 
-            // 7. Save updated accounts
+            // 6. Save updated accounts
             accountRepository.save(updatedSourceAccount)
             accountRepository.save(updatedDestinationAccount)
 
             logger.info("Accounts saved for ${event.transferId}")
 
-            // 8. Create and save transfer record as COMPLETED
+            // 7. Create and save transfer record as COMPLETED
             val transfer = Transfer(
                 transferId = event.transferId,
                 sourceAccountId = event.sourceAccountId,

@@ -41,8 +41,4 @@ class TransferRepository(
             Optional.empty()
         }
     }
-
-    fun exists(transferId: String): Boolean {
-        return findById(transferId).isPresent
-    }
 }
