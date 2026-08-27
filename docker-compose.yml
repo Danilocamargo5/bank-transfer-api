@@ -1,9 +1,9 @@
 version: '3.8'
 
 services:
-  # LocalStack: AWS services emulation (DynamoDB, SQS, API Gateway) - Community Edition (FREE)
+  # LocalStack: AWS services emulation (DynamoDB, SQS, API Gateway) - v4.14.0 (last free version)
   localstack:
-    image: localstack/localstack:latest
+    image: localstack/localstack:4.14.0
     container_name: localstack
     ports:
       - "4566:4566"      # LocalStack edge endpoint (all services)
