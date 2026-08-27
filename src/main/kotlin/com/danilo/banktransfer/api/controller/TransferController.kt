@@ -1,68 +1,56 @@
 package com.danilo.banktransfer.api.controller
 
-import com.danilo.banktransfer.domain.dto.TransferDTO
 import com.danilo.banktransfer.domain.dto.TransferRequestDTO
-import com.danilo.banktransfer.domain.enums.Currency
-import com.danilo.banktransfer.domain.enums.TransferStatus
-import com.danilo.banktransfer.domain.model.Transfer
-import com.danilo.banktransfer.infrastructure.repository.TransferRepository
+import com.danilo.banktransfer.domain.dto.TransferResponseDTO
+import com.danilo.banktransfer.messaging.TransferKafkaProducer
+import com.fasterxml.jackson.databind.ObjectMapper
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
-import org.springframework.web.bind.annotation.GetMapping
-import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
-import java.time.Instant
 
 @RestController
 @RequestMapping("/api/v1/transfers")
 class TransferController(
-    private val transferRepository: TransferRepository
+    private val kafkaProducer: TransferKafkaProducer,
+    private val objectMapper: ObjectMapper
 ) {
+    private val logger = LoggerFactory.getLogger(javaClass)
 
     @PostMapping
-    fun createTransfer(@RequestBody request: TransferRequestDTO): ResponseEntity<TransferDTO> {
-        val transfer = Transfer(
-            transferId = request.transferId,
-            sourceAccountId = request.sourceAccountId,
-            destinationAccountId = request.destinationAccountId,
-            amount = request.amount,
-            currency = Currency.valueOf(request.currency),
-            status = TransferStatus.PENDING,
-            requestedAt = request.requestedAt,
-            completedAt = null,
-            failureReason = null,
-            createdAt = Instant.now(),
-            updatedAt = Instant.now()
-        )
+    fun createTransfer(@RequestBody request: TransferRequestDTO): ResponseEntity<TransferResponseDTO> {
+        logger.info("Received transfer request: ${request.transferId}")
 
-        val saved = transferRepository.save(transfer)
+        return try {
+            // Publish to Kafka for async processing
+            val message = objectMapper.writeValueAsString(request)
+            val kafkaTemplate = kafkaProducer.javaClass.getDeclaredField("kafkaTemplate")
+            kafkaTemplate.isAccessible = true
+            val template = kafkaTemplate.get(kafkaProducer) as org.springframework.kafka.core.KafkaTemplate<String, String>
+            
+            template.send("transfer-requested", request.transferId, message)
 
-        return ResponseEntity
-            .status(HttpStatus.CREATED)
-            .body(toDTO(saved))
-    }
+            logger.info("Transfer request published to Kafka: ${request.transferId}")
 
-    @GetMapping("/{transferId}")
-    fun getTransfer(@PathVariable transferId: String): ResponseEntity<TransferDTO> {
-        return transferRepository.findById(transferId)
-            .map { ResponseEntity.ok(toDTO(it)) }
-            .orElse(ResponseEntity.notFound().build())
-    }
-
-    private fun toDTO(transfer: Transfer): TransferDTO {
-        return TransferDTO(
-            transferId = transfer.transferId,
-            sourceAccountId = transfer.sourceAccountId,
-            destinationAccountId = transfer.destinationAccountId,
-            amount = transfer.amount,
-            currency = transfer.currency.name,
-            status = transfer.status.name,
-            requestedAt = transfer.requestedAt,
-            completedAt = transfer.completedAt,
-            failureReason = transfer.failureReason
-        )
+            ResponseEntity.status(HttpStatus.ACCEPTED).body(
+                TransferResponseDTO(
+                    transferId = request.transferId,
+                    status = "PENDING",
+                    message = "Transfer request received and queued for processing"
+                )
+            )
+        } catch (e: Exception) {
+            logger.error("Error publishing transfer request: ${e.message}", e)
+            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+                TransferResponseDTO(
+                    transferId = request.transferId,
+                    status = "ERROR",
+                    message = "Failed to process transfer request: ${e.message}"
+                )
+            )
+        }
     }
 }
