@@ -1,30 +1,20 @@
 version: '3.8'
 
 services:
-  # LocalStack: AWS services emulation (DynamoDB + SQS)
-  localstack:
-    image: localstack/localstack:latest
-    container_name: localstack
+  # DynamoDB Local: Database
+  dynamodb:
+    image: amazon/dynamodb-local:latest
+    container_name: dynamodb
     ports:
-      - "4566:4566"      # LocalStack edge endpoint
-      - "4571:4571"      # DynamoDB
+      - "8000:8000"
     environment:
-      SERVICES: dynamodb,sqs
-      DEBUG: 1
-      DATA_DIR: /tmp/localstack/data
       AWS_ACCESS_KEY_ID: local
       AWS_SECRET_ACCESS_KEY: local
-      AWS_DEFAULT_REGION: us-east-1
-      DYNAMODB_SHARE_DB: "true"
-      DYNAMODB_STREAM_SPEC: "true"
-    volumes:
-      - "${TMPDIR:-.}/.localstack:/tmp/localstack"
-      - "/var/run/docker.sock:/var/run/docker.sock"
-      - "./scripts/init-localstack.sh:/docker-entrypoint-initaws.d/init-localstack.sh"
+    command: "-jar DynamoDBLocal.jar -sharedDb"
     networks:
       - bank-transfer-network
     healthcheck:
-      test: ["CMD", "awslocal", "dynamodb", "list-tables"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -120,27 +110,27 @@ services:
       timeout: 5s
       retries: 5
 
-  # DynamoDB Admin: Web UI for DynamoDB Local
-  dynamodb-admin:
-    image: aaronshaf/dynamodb-admin:latest
-    container_name: dynamodb-admin
-    ports:
-      - "8001:8001"
-    depends_on:
-      localstack:
-        condition: service_healthy
-    environment:
-      DYNAMO_ENDPOINT: http://localstack:4566
-      AWS_REGION: us-east-1
-      AWS_ACCESS_KEY_ID: local
-      AWS_SECRET_ACCESS_KEY: local
-    networks:
-      - bank-transfer-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+  # DynamoDB Admin - REMOVED (use AWS CLI or application to manage DynamoDB)
+  # dynamodb-admin:
+  #   image: aaronshaf/dynamodb-admin:latest
+  #   container_name: dynamodb-admin
+  #   ports:
+  #     - "8001:8001"
+  #   depends_on:
+  #     localstack:
+  #       condition: service_healthy
+  #   environment:
+  #     DYNAMO_ENDPOINT: http://localstack:4566
+  #     AWS_REGION: us-east-1
+  #     AWS_ACCESS_KEY_ID: local
+  #     AWS_SECRET_ACCESS_KEY: local
+  #   networks:
+  #     - bank-transfer-network
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8001/"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
 
 networks:
   bank-transfer-network:
