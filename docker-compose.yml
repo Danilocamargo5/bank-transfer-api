@@ -1,20 +1,29 @@
 version: '3.8'
 
 services:
-  # DynamoDB Local: Database
-  dynamodb:
-    image: amazon/dynamodb-local:latest
-    container_name: dynamodb
+  # LocalStack: AWS services emulation (DynamoDB, SQS, API Gateway) - Community Edition (FREE)
+  localstack:
+    image: localstack/localstack:latest
+    container_name: localstack
     ports:
-      - "8000:8000"
+      - "4566:4566"      # LocalStack edge endpoint (all services)
     environment:
+      SERVICES: dynamodb,sqs,apigateway
+      DEBUG: 1
+      DATA_DIR: /tmp/localstack/data
       AWS_ACCESS_KEY_ID: local
       AWS_SECRET_ACCESS_KEY: local
-    command: "-jar DynamoDBLocal.jar -sharedDb"
+      AWS_DEFAULT_REGION: us-east-1
+      DYNAMODB_SHARE_DB: "true"
+      DYNAMODB_STREAM_SPEC: "true"
+    volumes:
+      - "${TMPDIR:-.}/.localstack:/tmp/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "./scripts/init-localstack.sh:/docker-entrypoint-initaws.d/init-localstack.sh"
     networks:
       - bank-transfer-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000"]
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
       interval: 5s
       timeout: 5s
       retries: 5

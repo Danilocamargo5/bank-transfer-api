@@ -1,54 +1,106 @@
 #!/bin/bash
 
-# LocalStack Initialization Script
-# Creates DynamoDB tables and SQS queues for local development
-
 set -e
 
-echo "Initializing LocalStack services..."
-
 # Wait for LocalStack to be ready
-sleep 5
+echo "Waiting for LocalStack to be ready..."
+sleep 10
 
-# DynamoDB: Create Accounts table
-echo "Creating DynamoDB table: accounts"
-awslocal dynamodb create-table \
-  --table-name accounts \
-  --attribute-definitions AttributeName=accountId,AttributeType=S \
-  --key-schema AttributeName=accountId,KeyType=HASH \
-  --billing-mode PAY_PER_REQUEST \
-  --region us-east-1 || echo "Table 'accounts' already exists"
+ENDPOINT="http://localhost:4566"
+REGION="us-east-1"
 
-# DynamoDB: Create Transfers table
-echo "Creating DynamoDB table: transfers"
-awslocal dynamodb create-table \
-  --table-name transfers \
-  --attribute-definitions \
-    AttributeName=transferId,AttributeType=S \
-    AttributeName=requestedAt,AttributeType=S \
-  --key-schema \
-    AttributeName=transferId,KeyType=HASH \
-    AttributeName=requestedAt,KeyType=RANGE \
-  --billing-mode PAY_PER_REQUEST \
-  --region us-east-1 || echo "Table 'transfers' already exists"
+echo "=========================================="
+echo "Creating DynamoDB tables..."
+echo "=========================================="
 
-# SQS: Create DLQ for failed transfers
-echo "Creating SQS queue: transfer-failed-dlq"
-awslocal sqs create-queue \
-  --queue-name transfer-failed-dlq \
-  --region us-east-1 || echo "Queue 'transfer-failed-dlq' already exists"
+# Create accounts table
+aws dynamodb create-table \
+    --table-name accounts \
+    --attribute-definitions \
+        AttributeName=accountId,AttributeType=S \
+    --key-schema \
+        AttributeName=accountId,KeyType=HASH \
+    --billing-mode PAY_PER_REQUEST \
+    --endpoint-url $ENDPOINT \
+    --region $REGION 2>/dev/null || echo "Table 'accounts' already exists"
 
-# SQS: Create main queue for transfer failures
-echo "Creating SQS queue: transfer-failed"
-awslocal sqs create-queue \
-  --queue-name transfer-failed \
-  --attributes MaximumMessageRetentionPeriod=1209600,RedrivePolicy='{"deadLetterTargetArn":"arn:aws:sqs:us-east-1:000000000000:transfer-failed-dlq","maxReceiveCount":"3"}' \
-  --region us-east-1 || echo "Queue 'transfer-failed' already exists"
+echo "✓ Table 'accounts' created"
 
-echo "LocalStack initialization completed successfully!"
+# Create transfers table with composite key (transferId + requestedAt)
+aws dynamodb create-table \
+    --table-name transfers \
+    --attribute-definitions \
+        AttributeName=transferId,AttributeType=S \
+        AttributeName=requestedAt,AttributeType=S \
+    --key-schema \
+        AttributeName=transferId,KeyType=HASH \
+        AttributeName=requestedAt,KeyType=RANGE \
+    --billing-mode PAY_PER_REQUEST \
+    --endpoint-url $ENDPOINT \
+    --region $REGION 2>/dev/null || echo "Table 'transfers' already exists"
+
+echo "✓ Table 'transfers' created"
+
 echo ""
-echo "Resources created:"
-echo "  - DynamoDB: accounts table"
-echo "  - DynamoDB: transfers table"
-echo "  - SQS: transfer-failed queue (with DLQ)"
-echo "  - SQS: transfer-failed-dlq (dead-letter queue)"
+echo "=========================================="
+echo "Creating SQS queues..."
+echo "=========================================="
+
+# Create transfer-failed queue
+aws sqs create-queue \
+    --queue-name transfer-failed \
+    --attributes MessageRetentionPeriod=86400 \
+    --endpoint-url $ENDPOINT \
+    --region $REGION 2>/dev/null || echo "Queue 'transfer-failed' already exists"
+
+echo "✓ Queue 'transfer-failed' created"
+
+# Create transfer-failed-dlq (Dead Letter Queue)
+aws sqs create-queue \
+    --queue-name transfer-failed-dlq \
+    --attributes MessageRetentionPeriod=1209600 \
+    --endpoint-url $ENDPOINT \
+    --region $REGION 2>/dev/null || echo "Queue 'transfer-failed-dlq' already exists"
+
+echo "✓ Queue 'transfer-failed-dlq' created"
+
+echo ""
+echo "=========================================="
+echo "Creating API Gateway..."
+echo "=========================================="
+
+# Create REST API
+API_ID=$(aws apigateway create-rest-api \
+    --name bank-transfer-api \
+    --description "Bank Transfer Microservice API" \
+    --endpoint-url $ENDPOINT \
+    --region $REGION \
+    --query 'id' \
+    --output text 2>/dev/null || echo "")
+
+if [ -z "$API_ID" ] || [ "$API_ID" == "None" ]; then
+    echo "ℹ API Gateway already exists or error creating"
+else
+    echo "✓ API Gateway created: $API_ID"
+    
+    # Get root resource
+    ROOT_ID=$(aws apigateway get-resources \
+        --rest-api-id $API_ID \
+        --endpoint-url $ENDPOINT \
+        --region $REGION \
+        --query 'items[0].id' \
+        --output text)
+    
+    echo "✓ Root resource: $ROOT_ID"
+fi
+
+echo ""
+echo "=========================================="
+echo "✅ LocalStack initialization complete!"
+echo "=========================================="
+echo ""
+echo "Services available at:"
+echo "  - DynamoDB: $ENDPOINT"
+echo "  - SQS: $ENDPOINT"
+echo "  - API Gateway: $ENDPOINT"
+echo ""

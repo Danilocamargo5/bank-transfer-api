@@ -7,13 +7,14 @@ import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
+import software.amazon.awssdk.services.sqs.SqsClient
 import java.net.URI
 
 @Configuration
 class DynamoDBConfig(
-    @Value("\${aws.dynamodb.endpoint}")
+    @Value("\${aws.endpoint.url}")
     private val endpoint: String,
-    @Value("\${aws.dynamodb.region}")
+    @Value("\${aws.region}")
     private val region: String,
     @Value("\${aws.access.key.id}")
     private val accessKeyId: String,
@@ -24,6 +25,19 @@ class DynamoDBConfig(
     @Bean
     fun dynamoDbClient(): DynamoDbClient {
         return DynamoDbClient.builder()
+            .endpointOverride(URI.create(endpoint))
+            .region(Region.of(region))
+            .credentialsProvider(
+                StaticCredentialsProvider.create(
+                    AwsBasicCredentials.create(accessKeyId, secretAccessKey)
+                )
+            )
+            .build()
+    }
+
+    @Bean
+    fun sqsClient(): SqsClient {
+        return SqsClient.builder()
             .endpointOverride(URI.create(endpoint))
             .region(Region.of(region))
             .credentialsProvider(
