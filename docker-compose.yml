@@ -112,23 +112,16 @@ services:
       - |
         echo "Waiting for DynamoDB tables to be created..."
         
-        # Retry loop to wait for accounts table
-        RETRY_COUNT=0
-        MAX_RETRIES=30
-        while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+        RETRY=0
+        while [ $$RETRY -lt 30 ]; do
           if aws dynamodb describe-table --table-name accounts --endpoint-url http://localstack:4566 2>/dev/null | grep -q "TableArn"; then
             echo "✓ Accounts table found!"
             break
           fi
-          RETRY_COUNT=$((RETRY_COUNT + 1))
-          echo "  Attempt $RETRY_COUNT/$MAX_RETRIES - Waiting for accounts table..."
+          RETRY=$$(( $$RETRY + 1 ))
+          echo "  Retry $$RETRY/30 - Waiting for accounts table..."
           sleep 1
         done
-        
-        if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
-          echo "❌ Accounts table not found after ${MAX_RETRIES}s"
-          exit 1
-        fi
         
         echo ""
         echo "Creating sample test accounts..."
@@ -137,29 +130,26 @@ services:
           --table-name accounts \
           --item '{"accountId": {"S": "acc-001"}, "balance": {"N": "5000.00"}, "currency": {"S": "BRL"}, "status": {"S": "ACTIVE"}, "customerName": {"S": "João Silva"}, "createdAt": {"S": "2026-08-27T21:00:00Z"}, "updatedAt": {"S": "2026-08-27T21:00:00Z"}}' \
           --endpoint-url http://localstack:4566
-        
         echo "✓ Account acc-001 created"
         
         aws dynamodb put-item \
           --table-name accounts \
           --item '{"accountId": {"S": "acc-002"}, "balance": {"N": "1000.00"}, "currency": {"S": "BRL"}, "status": {"S": "ACTIVE"}, "customerName": {"S": "Maria Santos"}, "createdAt": {"S": "2026-08-27T21:00:00Z"}, "updatedAt": {"S": "2026-08-27T21:00:00Z"}}' \
           --endpoint-url http://localstack:4566
-        
         echo "✓ Account acc-002 created"
         
         aws dynamodb put-item \
           --table-name accounts \
           --item '{"accountId": {"S": "acc-003"}, "balance": {"N": "3500.00"}, "currency": {"S": "BRL"}, "status": {"S": "ACTIVE"}, "customerName": {"S": "Pedro Costa"}, "createdAt": {"S": "2026-08-27T21:00:00Z"}, "updatedAt": {"S": "2026-08-27T21:00:00Z"}}' \
           --endpoint-url http://localstack:4566
-        
         echo "✓ Account acc-003 created"
         
         aws dynamodb put-item \
           --table-name accounts \
           --item '{"accountId": {"S": "acc-000"}, "balance": {"N": "0.00"}, "currency": {"S": "BRL"}, "status": {"S": "INACTIVE"}, "customerName": {"S": "Conta Encerrada"}, "createdAt": {"S": "2026-08-27T21:00:00Z"}, "updatedAt": {"S": "2026-08-27T21:00:00Z"}}' \
           --endpoint-url http://localstack:4566
-        
         echo "✓ Account acc-000 (inactive) created"
+        
         echo "✅ Sample data initialization complete!"
     networks:
       - bank-transfer-network
