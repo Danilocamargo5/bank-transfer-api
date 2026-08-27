@@ -6,7 +6,7 @@ services:
     ports:
       - "4566:4566"      # LocalStack edge endpoint (all services)
     environment:
-      SERVICES: dynamodb,sqs,apigateway
+      SERVICES: dynamodb,sqs,apigateway,s3
       DEBUG: 1
       AWS_ACCESS_KEY_ID: local
       AWS_SECRET_ACCESS_KEY: local
