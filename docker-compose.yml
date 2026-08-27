@@ -36,7 +36,7 @@ services:
     networks:
       - bank-transfer-network
     healthcheck:
-      test: ["CMD", "echo", "ruok | nc localhost 2181"]
+      test: ["CMD", "bash", "-c", "echo ruok | nc localhost 2181"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -64,10 +64,11 @@ services:
     networks:
       - bank-transfer-network
     healthcheck:
-      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "kafka:29092", "--list"]
       interval: 5s
-      timeout: 5s
+      timeout: 10s
       retries: 5
+      start_period: 10s
     volumes:
       - ./scripts/init-kafka.sh:/usr/local/bin/init-kafka.sh
 
