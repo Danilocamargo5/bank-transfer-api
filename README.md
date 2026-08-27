@@ -15,18 +15,35 @@ A microservice for processing bank transfers with Kafka event streaming, DynamoD
 ## Architecture
 
 ```
-API Gateway / External Service
-        ↓ (public event)
-    Kafka Topic "transfer-requested"
-        ↓
-Microservice (Kotlin + Spring Boot)
-    - Validates transfer
-    - Debits source account
-    - Credits destination account
-    ↓ (business logic failures)
-SQS DLQ "transfer-failed"
-    ↓ (success)
-Kafka Topic "transfer-completed"
+┌─────────────────────────────────────────────────────────────────┐
+│                      LOCAL DEVELOPMENT ENVIRONMENT              │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Kafka Topics (via Docker)                                      │
+│  ├─ transfer-requested → [Event Input]                          │
+│  ├─ transfer-completed → [Success Event]                        │
+│  └─ transfer-failed → [Business Failure Event]                  │
+│                                                                 │
+│  DynamoDB (via LocalStack)                                      │
+│  ├─ accounts table (account data & balance)                     │
+│  └─ transfers table (transaction history)                       │
+│                                                                 │
+│  SQS (via LocalStack)                                           │
+│  ├─ transfer-failed queue (retry logic)                         │
+│  └─ transfer-failed-dlq (dead letter queue)                     │
+│                                                                 │
+│  Microservice (Spring Boot 3.2.4 + Kotlin)                      │
+│  └─ Consumes transfer-requested                                 │
+│     ├─ Validates (balance, accounts, amount, currency)          │
+│     ├─ Updates DynamoDB atomically                              │
+│     ├─ Publishes transfer-completed on success                  │
+│     └─ Publishes to SQS transfer-failed on business errors      │
+│                                                                 │
+│  Admin Tools (Web UIs)                                          │
+│  ├─ Kafka UI (http://localhost:8081) - Monitor topics           │
+│  └─ DynamoDB Admin (http://localhost:8001) - Browse data        │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ## Functional Requirements
@@ -79,25 +96,57 @@ bank-transfer-api/
 
 ### Local Development
 
-1. Start infrastructure:
+1. **Start Infrastructure** (LocalStack, Kafka, Zookeeper, Admin Tools):
 ```bash
+make dev-up
+# or
 docker-compose up -d
 ```
 
-2. Build project:
+   This starts:
+   - LocalStack (DynamoDB + SQS) on http://localhost:4566
+   - Kafka on localhost:9092
+   - Kafka UI on http://localhost:8081
+   - DynamoDB Admin on http://localhost:8001
+
+2. **Build Project**:
 ```bash
-./gradlew build
+make build
+# or
+./gradlew clean build
 ```
 
-3. Run application:
+3. **Run Application**:
 ```bash
-./gradlew bootRun
+make run
+# or
+./gradlew bootRun --args='--spring.profiles.active=dev'
 ```
 
-4. Check health:
+4. **Check Application Health**:
 ```bash
 curl http://localhost:8080/actuator/health
 ```
+
+5. **Access Admin Tools**:
+   - **Kafka UI**: http://localhost:8081 (monitor topics and messages)
+   - **DynamoDB Admin**: http://localhost:8001 (browse tables and data)
+   - **Application Metrics**: http://localhost:8080/actuator/metrics
+
+6. **Stop Infrastructure**:
+```bash
+make dev-down
+# or
+docker-compose down
+```
+
+### For Detailed Infrastructure Setup
+
+See [INFRASTRUCTURE.md](./INFRASTRUCTURE.md) for:
+- Service details and ports
+- Sample data insertion
+- Monitoring and debugging
+- Troubleshooting guide
 
 ## Development Phases
 
