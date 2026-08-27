@@ -36,38 +36,56 @@ class TransferService(
 
             // 2. Validate transfer
             validateTransfer(event)
+            logger.info("Transfer validation passed for ${event.transferId}")
 
             // 3. Get accounts
             val sourceAccount = accountRepository.findById(event.sourceAccountId)
-                .orElseThrow { AccountNotFoundException("Source account ${event.sourceAccountId} not found") }
+                .orElseThrow { 
+                    logger.error("Source account ${event.sourceAccountId} not found")
+                    AccountNotFoundException("Source account ${event.sourceAccountId} not found") 
+                }
 
             val destinationAccount = accountRepository.findById(event.destinationAccountId)
-                .orElseThrow { AccountNotFoundException("Destination account ${event.destinationAccountId} not found") }
+                .orElseThrow { 
+                    logger.error("Destination account ${event.destinationAccountId} not found")
+                    AccountNotFoundException("Destination account ${event.destinationAccountId} not found") 
+                }
+
+            logger.info("Accounts found: source=${sourceAccount.accountId}, dest=${destinationAccount.accountId}")
 
             // 4. Validate account statuses
             if (!sourceAccount.isActive()) {
+                logger.error("Source account ${event.sourceAccountId} is not active. Status: ${sourceAccount.status}")
                 throw InactiveAccountException("Source account ${event.sourceAccountId} is not active")
             }
 
             if (!destinationAccount.isActive()) {
+                logger.error("Destination account ${event.destinationAccountId} is not active. Status: ${destinationAccount.status}")
                 throw InactiveAccountException("Destination account ${event.destinationAccountId} is not active")
             }
 
             // 5. Validate sufficient balance
             if (!sourceAccount.hasSufficientBalance(event.amount)) {
+                logger.error("Insufficient balance in account ${event.sourceAccountId}. Required: ${event.amount}, Available: ${sourceAccount.balance}")
                 throw InsufficientBalanceException(
                     "Insufficient balance in account ${event.sourceAccountId}. " +
                     "Required: ${event.amount}, Available: ${sourceAccount.balance}"
                 )
             }
 
+            logger.info("Balance validation passed for ${event.transferId}")
+
             // 6. Perform atomic debit/credit
             val updatedSourceAccount = sourceAccount.debit(event.amount)
             val updatedDestinationAccount = destinationAccount.credit(event.amount)
 
+            logger.info("Debit/credit complete for ${event.transferId}. New balances: source=${updatedSourceAccount.balance}, dest=${updatedDestinationAccount.balance}")
+
             // 7. Save updated accounts
             accountRepository.save(updatedSourceAccount)
             accountRepository.save(updatedDestinationAccount)
+
+            logger.info("Accounts saved for ${event.transferId}")
 
             // 8. Create and save transfer record as COMPLETED
             val transfer = Transfer(
