@@ -21,6 +21,7 @@ dependencies {
 	
 	// Spring Retry
 	implementation("org.springframework.retry:spring-retry")
+	implementation("org.aspectj:aspectjweaver:1.9.22")
 	
 	// Kafka
 	implementation("org.springframework.kafka:spring-kafka")
