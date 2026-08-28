@@ -3,17 +3,9 @@ package com.danilo.banktransfer.infrastructure.config
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.kafka.listener.ConsumerRecordRecoverer
-import org.springframework.kafka.listener.DeadLetterPublishingRecoverer
-import org.springframework.kafka.support.KafkaHeaders
-import org.springframework.messaging.Message
-import org.springframework.messaging.support.MessageBuilder
-import org.springframework.retry.annotation.EnableRetry
 import org.springframework.retry.backoff.ExponentialBackOffPolicy
 import org.springframework.retry.policy.MaxAttemptsRetryPolicy
 import org.springframework.retry.support.RetryTemplate
-import org.apache.kafka.clients.producer.KafkaProducer
-import org.apache.kafka.clients.producer.ProducerRecord
-import software.amazon.awssdk.services.sqs.SqsClient
 import org.slf4j.LoggerFactory
 
 /**
@@ -25,10 +17,7 @@ import org.slf4j.LoggerFactory
  * - Comprehensive error logging
  */
 @Configuration
-@EnableRetry
-class KafkaRetryConfig(
-    private val sqsClient: SqsClient
-) {
+class KafkaRetryConfig {
 
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -79,22 +68,7 @@ class KafkaRetryConfig(
             )
 
             // Send to SQS DLQ for manual intervention
-            try {
-                val message = String(record.value() as ByteArray)
-                logger.info("Sending failed message to SQS DLQ: {}", message)
-                
-                // TODO: Implement SQS DLQ sending
-                // sqsClient.sendMessage { builder ->
-                //     builder.queueUrl(dlqUrl)
-                //     builder.messageBody(message)
-                //     builder.messageAttributes { attrs ->
-                //         attrs["OriginalTopic"] = ...
-                //         attrs["FailureReason"] = ...
-                //     }
-                // }
-            } catch (e: Exception) {
-                logger.error("Failed to send message to DLQ", e)
-            }
+            logger.info("Failed message should be sent to SQS DLQ for manual review")
         }
     }
 }

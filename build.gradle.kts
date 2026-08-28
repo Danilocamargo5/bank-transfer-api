@@ -17,6 +17,10 @@ dependencies {
 	// Spring Boot
 	implementation("org.springframework.boot:spring-boot-starter-webflux")
 	implementation("org.springframework.boot:spring-boot-starter-actuator")
+	implementation("org.springframework.boot:spring-boot-starter-aop")
+	
+	// Spring Retry
+	implementation("org.springframework.retry:spring-retry")
 	
 	// Kafka
 	implementation("org.springframework.kafka:spring-kafka")
