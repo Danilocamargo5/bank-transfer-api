@@ -41,6 +41,9 @@ dependencies {
 	// Logging
 	implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")
 	
+	// Metrics
+	implementation("io.micrometer:micrometer-core")
+	
 	// Testing
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
 	testImplementation("org.springframework.kafka:spring-kafka-test")

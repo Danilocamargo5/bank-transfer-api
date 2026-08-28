@@ -20,11 +20,13 @@ import java.time.Instant
 @Service
 class TransferService(
     private val accountRepository: AccountRepository,
-    private val transferRepository: TransferRepository
+    private val transferRepository: TransferRepository,
+    private val transferMetrics: TransferMetrics
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
     fun processTransfer(event: TransferRequestedEvent): Result {
+        val startTime = System.currentTimeMillis()
         logger.info("Processing transfer: ${event.transferId} from ${event.sourceAccountId} to ${event.destinationAccountId}")
 
         return try {
@@ -105,6 +107,10 @@ class TransferService(
             transferRepository.save(transfer)
 
             logger.info("Transfer ${event.transferId} completed successfully")
+            
+            val duration = System.currentTimeMillis() - startTime
+            transferMetrics.recordTransferProcessingTime(duration)
+            transferMetrics.recordTransferSuccess()
 
             Result.Success(
                 TransferCompletedEvent(
@@ -118,6 +124,10 @@ class TransferService(
             )
         } catch (e: Exception) {
             logger.error("Transfer ${event.transferId} failed: ${e.message}", e)
+            
+            val duration = System.currentTimeMillis() - startTime
+            transferMetrics.recordTransferProcessingTime(duration)
+            transferMetrics.recordTransferFailure(e::class.simpleName ?: "UnknownError")
 
             val failureReason = e.message ?: "Unknown error"
             
