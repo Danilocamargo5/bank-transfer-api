@@ -34,5 +34,4 @@ sleep 5
 echo "✅ All services ready!"
 echo ""
 echo "📦 Starting Bank Transfer API..."
-export JAVA_OPTS="-Xmx512m"
-./gradlew bootRun --args='--spring.profiles.active=dev'
+./gradlew bootRun
