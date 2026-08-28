@@ -73,63 +73,39 @@ services:
         echo "  Kafka Topics Initialization Started"
         echo "=========================================="
         
-        # Wait for Kafka to fully stabilize after health check passes
-        echo "Waiting 30s for Kafka to fully stabilize..."
-        sleep 30
+        echo "Waiting 60s for Kafka to fully stabilize..."
+        sleep 60
         
-        # Validate Kafka is responding to admin commands
-        echo "Validating Kafka connectivity..."
-        MAX_VALIDATION=10
-        VALIDATION_ATTEMPT=0
+        echo ""
+        echo "Creating Kafka topics with retries..."
         
-        while [ $$VALIDATION_ATTEMPT -lt $$MAX_VALIDATION ]; do
-          if kafka-broker-api-versions --bootstrap-server kafka:29092 > /dev/null 2>&1; then
-            echo "✅ Kafka admin API is responding!"
-            break
+        # Retry logic for topic creation
+        MAX_RETRIES=5
+        RETRY=0
+        
+        while [ $RETRY -lt $MAX_RETRIES ]; do
+          echo "Attempt $((RETRY + 1))/$MAX_RETRIES..."
+          
+          if kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-requested --partitions 3 --replication-factor 1 && \
+             kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-completed --partitions 3 --replication-factor 1 && \
+             kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-failed --partitions 1 --replication-factor 1; then
+            echo ""
+            echo "✅ All topics created successfully!"
+            echo ""
+            echo "Topics:"
+            kafka-topics --bootstrap-server kafka:29092 --list
+            exit 0
           fi
-          VALIDATION_ATTEMPT=$$(( $$VALIDATION_ATTEMPT + 1 ))
-          echo "Attempt $$VALIDATION_ATTEMPT/$$MAX_VALIDATION: Kafka admin API not ready, waiting 5s..."
-          sleep 5
+          
+          RETRY=$((RETRY + 1))
+          if [ $RETRY -lt $MAX_RETRIES ]; then
+            echo "Retrying in 10s..."
+            sleep 10
+          fi
         done
         
-        if [ $$VALIDATION_ATTEMPT -eq $$MAX_VALIDATION ]; then
-          echo "❌ Kafka admin API failed to respond after $$(( $$MAX_VALIDATION * 5 ))s"
-          exit 1
-        fi
-        
-        echo ""
-        echo "Creating Kafka topics..."
-        
-        # Create each topic with validation
-        echo "Creating topic: transfer-requested..."
-        kafka-topics --bootstrap-server kafka:29092 \
-          --create --if-not-exists \
-          --topic transfer-requested \
-          --partitions 3 \
-          --replication-factor 1 && echo "✅ transfer-requested created" || echo "⚠️ transfer-requested already exists"
-        
-        echo "Creating topic: transfer-completed..."
-        kafka-topics --bootstrap-server kafka:29092 \
-          --create --if-not-exists \
-          --topic transfer-completed \
-          --partitions 3 \
-          --replication-factor 1 && echo "✅ transfer-completed created" || echo "⚠️ transfer-completed already exists"
-        
-        echo "Creating topic: transfer-failed..."
-        kafka-topics --bootstrap-server kafka:29092 \
-          --create --if-not-exists \
-          --topic transfer-failed \
-          --partitions 1 \
-          --replication-factor 1 && echo "✅ transfer-failed created" || echo "⚠️ transfer-failed already exists"
-        
-        echo ""
-        echo "Verifying topics..."
-        kafka-topics --bootstrap-server kafka:29092 --list
-        
-        echo ""
-        echo "=========================================="
-        echo "✅ Kafka Topics Initialization Complete"
-        echo "=========================================="
+        echo "❌ Failed to create topics after $MAX_RETRIES attempts"
+        exit 1
     networks:
       - bank-transfer-network
 
