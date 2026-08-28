@@ -5,7 +5,7 @@ set -e
 echo "🚀 Starting Docker containers..."
 docker-compose up -d
 
-# Wait for LocalStack to be ready by checking health endpoint
+# Wait for LocalStack to be ready
 echo "⏳ Waiting for LocalStack to be fully ready..."
 
 MAX_ATTEMPTS=60
@@ -27,8 +27,33 @@ if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
   exit 1
 fi
 
-# Wait a bit more to ensure all services (DynamoDB, SQS, API Gateway) are initialized
-echo "⏳ Waiting for all services to initialize..."
+# Wait for Kafka topics to be created
+echo "⏳ Waiting for Kafka topics to be created..."
+
+MAX_KAFKA_ATTEMPTS=120
+KAFKA_ATTEMPT=0
+
+while [ $KAFKA_ATTEMPT -lt $MAX_KAFKA_ATTEMPTS ]; do
+  TOPICS=$(docker compose exec -T kafka kafka-topics --bootstrap-server kafka:29092 --list 2>/dev/null | grep -E "transfer-" | wc -l)
+  
+  if [ "$TOPICS" -eq 3 ]; then
+    echo "✅ All Kafka topics created!"
+    break
+  fi
+  
+  KAFKA_ATTEMPT=$((KAFKA_ATTEMPT + 1))
+  echo "  Attempt $KAFKA_ATTEMPT/$MAX_KAFKA_ATTEMPTS - Topics not ready ($TOPICS/3), waiting 2s..."
+  sleep 2
+done
+
+if [ $KAFKA_ATTEMPT -eq $MAX_KAFKA_ATTEMPTS ]; then
+  echo "❌ Kafka topics failed to create after $((MAX_KAFKA_ATTEMPTS * 2))s"
+  echo "❌ Aborting application startup"
+  exit 1
+fi
+
+# Wait for sample data to be initialized
+echo "⏳ Waiting for sample data to be initialized..."
 sleep 5
 
 echo "✅ All services ready!"
