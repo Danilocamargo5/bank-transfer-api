@@ -24,56 +24,38 @@ services:
       timeout: 5s
       retries: 5
 
-  # Zookeeper: Kafka coordination
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.5.0
-    container_name: zookeeper
-    ports:
-      - "2181:2181"
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-    networks:
-      - bank-transfer-network
-    healthcheck:
-      test: ["CMD", "bash", "-c", "echo ruok | nc localhost 2181"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
-
-  # Kafka: Event streaming
+  # Kafka: Event streaming (KRaft mode - no Zookeeper)
   kafka:
     image: confluentinc/cp-kafka:7.5.0
     container_name: kafka
     ports:
       - "9092:9092"
       - "29092:29092"
-    depends_on:
-      zookeeper:
-        condition: service_started
     environment:
       KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ZOOKEEPER_SESSION_TIMEOUT_MS: 120000
-      KAFKA_ZOOKEEPER_CONNECTION_TIMEOUT_MS: 120000
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_LISTENERS: PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+      CLUSTER_ID: MkwQo23dQ6SNiP1rvNV_IQ
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
       KAFKA_LOG_RETENTION_HOURS: 168
       KAFKA_LOG_RETENTION_BYTES: 1073741824
     networks:
       - bank-transfer-network
     healthcheck:
-      test: ["CMD", "kafka-topics", "--bootstrap-server", "kafka:29092", "--list"]
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "kafka:29092"]
       interval: 5s
-      timeout: 15s
-      retries: 30
-      start_period: 60s
-    volumes:
-      - ./scripts/init-kafka.sh:/usr/local/bin/init-kafka.sh
+      timeout: 10s
+      retries: 15
+      start_period: 30s
 
   # Kafka Topics Initialization
   kafka-init:
@@ -155,27 +137,7 @@ services:
         echo "✅ Sample data initialization complete!"
     networks:
       - bank-transfer-network
-  kafka-ui:
-    image: provectuslabs/kafka-ui:latest
-    container_name: kafka-ui
-    ports:
-      - "8081:8080"
-    depends_on:
-      - kafka
-      - zookeeper
-    environment:
-      KAFKA_CLUSTERS_0_NAME: local
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
-      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
-    networks:
-      - bank-transfer-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # DynamoDB Admin - REMOVED (use AWS CLI or application to manage DynamoDB)
+  # Kafka Topics Initialization
   # dynamodb-admin:
   #   image: aaronshaf/dynamodb-admin:latest
   #   container_name: dynamodb-admin
