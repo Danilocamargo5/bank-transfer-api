@@ -67,15 +67,34 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        echo "Waiting for Kafka to be ready..."
-        sleep 10
+        echo "Waiting for Kafka broker to be fully ready..."
+        
+        # Retry loop to ensure Kafka is ready
+        MAX_ATTEMPTS=30
+        ATTEMPT=0
+        until [ $$ATTEMPT -ge $$MAX_ATTEMPTS ]; do
+          if kafka-topics --bootstrap-server kafka:29092 --list > /dev/null 2>&1; then
+            echo "✅ Kafka broker is ready!"
+            break
+          fi
+          ATTEMPT=$$(( $$ATTEMPT + 1 ))
+          echo "Attempt $$ATTEMPT/$$MAX_ATTEMPTS: Kafka not ready, retrying in 2s..."
+          sleep 2
+        done
+        
+        if [ $$ATTEMPT -eq $$MAX_ATTEMPTS ]; then
+          echo "❌ Failed to connect to Kafka after $$(( $$MAX_ATTEMPTS * 2 ))s"
+          exit 1
+        fi
         
         echo "Creating Kafka topics..."
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-requested --partitions 3 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-completed --partitions 3 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-failed --partitions 1 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-requested --partitions 3 --replication-factor 1 && echo "✅ transfer-requested created"
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-completed --partitions 3 --replication-factor 1 && echo "✅ transfer-completed created"
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-failed --partitions 1 --replication-factor 1 && echo "✅ transfer-failed created"
         
-        echo "Kafka topics created successfully!"
+        echo ""
+        echo "✅ Kafka topics created successfully!"
+        echo "Topics:"
         kafka-topics --bootstrap-server kafka:29092 --list
     networks:
       - bank-transfer-network
@@ -94,47 +113,58 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
+        set -e
         echo "Waiting for DynamoDB tables to be created..."
         
-        RETRY=0
-        while [ $$RETRY -lt 30 ]; do
+        MAX_ATTEMPTS=30
+        ATTEMPT=0
+        until [ $$ATTEMPT -ge $$MAX_ATTEMPTS ]; do
           if aws dynamodb describe-table --table-name accounts --endpoint-url http://localstack:4566 2>/dev/null | grep -q "TableArn"; then
-            echo "✓ Accounts table found!"
+            echo "✅ Accounts table is ready!"
             break
           fi
-          RETRY=$$(( $$RETRY + 1 ))
-          echo "  Retry $$RETRY/30 - Waiting for accounts table..."
+          ATTEMPT=$$(( $$ATTEMPT + 1 ))
+          echo "Attempt $$ATTEMPT/$$MAX_ATTEMPTS: Waiting for DynamoDB..."
           sleep 1
         done
+        
+        if [ $$ATTEMPT -eq $$MAX_ATTEMPTS ]; then
+          echo "❌ Failed to connect to DynamoDB after $$(( $$MAX_ATTEMPTS ))s"
+          exit 1
+        fi
         
         echo ""
         echo "Creating sample test accounts..."
         
+        # Create acc-001
         aws dynamodb put-item \
           --table-name accounts \
-          --item '{"accountId": {"S": "acc-001"}, "balance": {"N": "5000.00"}, "currency": {"S": "BRL"}, "status": {"S": "ACTIVE"}, "customerName": {"S": "João Silva"}, "createdAt": {"S": "2026-08-27T21:00:00Z"}, "updatedAt": {"S": "2026-08-27T21:00:00Z"}}' \
-          --endpoint-url http://localstack:4566
-        echo "✓ Account acc-001 created"
+          --item '{"accountId": {"S": "acc-001"}, "balance": {"N": "5000.00"}, "currency": {"S": "BRL"}, "status": {"S": "ACTIVE"}, "customerName": {"S": "João Silva"}}' \
+          --endpoint-url http://localstack:4566 && echo "✅ acc-001 created" || echo "❌ Failed to create acc-001"
         
+        # Create acc-002
         aws dynamodb put-item \
           --table-name accounts \
-          --item '{"accountId": {"S": "acc-002"}, "balance": {"N": "1000.00"}, "currency": {"S": "BRL"}, "status": {"S": "ACTIVE"}, "customerName": {"S": "Maria Santos"}, "createdAt": {"S": "2026-08-27T21:00:00Z"}, "updatedAt": {"S": "2026-08-27T21:00:00Z"}}' \
-          --endpoint-url http://localstack:4566
-        echo "✓ Account acc-002 created"
+          --item '{"accountId": {"S": "acc-002"}, "balance": {"N": "1000.00"}, "currency": {"S": "BRL"}, "status": {"S": "ACTIVE"}, "customerName": {"S": "Maria Santos"}}' \
+          --endpoint-url http://localstack:4566 && echo "✅ acc-002 created" || echo "❌ Failed to create acc-002"
         
+        # Create acc-003
         aws dynamodb put-item \
           --table-name accounts \
-          --item '{"accountId": {"S": "acc-003"}, "balance": {"N": "3500.00"}, "currency": {"S": "BRL"}, "status": {"S": "ACTIVE"}, "customerName": {"S": "Pedro Costa"}, "createdAt": {"S": "2026-08-27T21:00:00Z"}, "updatedAt": {"S": "2026-08-27T21:00:00Z"}}' \
-          --endpoint-url http://localstack:4566
-        echo "✓ Account acc-003 created"
+          --item '{"accountId": {"S": "acc-003"}, "balance": {"N": "3500.00"}, "currency": {"S": "BRL"}, "status": {"S": "ACTIVE"}, "customerName": {"S": "Pedro Costa"}}' \
+          --endpoint-url http://localstack:4566 && echo "✅ acc-003 created" || echo "❌ Failed to create acc-003"
         
+        # Create acc-000 (inactive)
         aws dynamodb put-item \
           --table-name accounts \
-          --item '{"accountId": {"S": "acc-000"}, "balance": {"N": "0.00"}, "currency": {"S": "BRL"}, "status": {"S": "INACTIVE"}, "customerName": {"S": "Conta Encerrada"}, "createdAt": {"S": "2026-08-27T21:00:00Z"}, "updatedAt": {"S": "2026-08-27T21:00:00Z"}}' \
-          --endpoint-url http://localstack:4566
-        echo "✓ Account acc-000 (inactive) created"
+          --item '{"accountId": {"S": "acc-000"}, "balance": {"N": "0.00"}, "currency": {"S": "BRL"}, "status": {"S": "INACTIVE"}, "customerName": {"S": "Conta Encerrada"}}' \
+          --endpoint-url http://localstack:4566 && echo "✅ acc-000 (inactive) created" || echo "❌ Failed to create acc-000"
         
+        echo ""
         echo "✅ Sample data initialization complete!"
+        echo ""
+        echo "Current accounts:"
+        aws dynamodb scan --table-name accounts --endpoint-url http://localstack:4566 --query 'Items[*].[accountId.S, balance.N]' --output table
     networks:
       - bank-transfer-network
   # Kafka Topics Initialization
