@@ -39,8 +39,8 @@ services:
       test: ["CMD", "bash", "-c", "echo ruok | nc localhost 2181"]
       interval: 5s
       timeout: 5s
-      retries: 5
-      start_period: 15s
+      retries: 10
+      start_period: 30s
 
   # Kafka: Event streaming
   kafka:
@@ -51,12 +51,12 @@ services:
       - "29092:29092"
     depends_on:
       zookeeper:
-        condition: service_healthy
+        condition: service_started
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ZOOKEEPER_SESSION_TIMEOUT_MS: 60000
-      KAFKA_ZOOKEEPER_CONNECTION_TIMEOUT_MS: 60000
+      KAFKA_ZOOKEEPER_SESSION_TIMEOUT_MS: 120000
+      KAFKA_ZOOKEEPER_CONNECTION_TIMEOUT_MS: 120000
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
@@ -69,9 +69,9 @@ services:
     healthcheck:
       test: ["CMD", "kafka-topics", "--bootstrap-server", "kafka:29092", "--list"]
       interval: 5s
-      timeout: 10s
-      retries: 10
-      start_period: 30s
+      timeout: 15s
+      retries: 30
+      start_period: 60s
     volumes:
       - ./scripts/init-kafka.sh:/usr/local/bin/init-kafka.sh
 
