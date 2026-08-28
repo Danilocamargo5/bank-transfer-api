@@ -5,7 +5,40 @@ set -e
 echo "🚀 Starting Docker containers..."
 docker-compose up -d
 
-# Wait for LocalStack to be ready
+# FIRST: Wait for kafka-init container to complete successfully
+echo "⏳ Waiting for Kafka topics initialization..."
+
+MAX_WAIT=600  # 10 minutes max
+ELAPSED=0
+
+while [ $ELAPSED -lt $MAX_WAIT ]; do
+  # Check if kafka-init container has exited
+  STATUS=$(docker compose ps kafka-init --format "{{.State}}" 2>/dev/null || echo "unknown")
+  
+  if [ "$STATUS" = "exited" ]; then
+    # Check exit code
+    EXIT_CODE=$(docker compose ps kafka-init --format "{{.ExitCode}}" 2>/dev/null || echo "1")
+    if [ "$EXIT_CODE" = "0" ]; then
+      echo "✅ Kafka topics initialized successfully!"
+      break
+    else
+      echo "❌ Kafka initialization failed with exit code $EXIT_CODE"
+      docker compose logs kafka-init | tail -20
+      exit 1
+    fi
+  fi
+  
+  ELAPSED=$((ELAPSED + 5))
+  echo "  Waiting... (${ELAPSED}s elapsed)"
+  sleep 5
+done
+
+if [ $ELAPSED -ge $MAX_WAIT ]; then
+  echo "❌ Kafka initialization timed out after ${MAX_WAIT}s"
+  exit 1
+fi
+
+# SECOND: Wait for LocalStack to be ready
 echo "⏳ Waiting for LocalStack to be fully ready..."
 
 MAX_ATTEMPTS=60
@@ -27,36 +60,11 @@ if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
   exit 1
 fi
 
-# Wait for Kafka topics to be created (up to 5 min)
-echo "⏳ Waiting for Kafka topics to be created..."
-
-MAX_KAFKA_ATTEMPTS=150
-KAFKA_ATTEMPT=0
-
-while [ $KAFKA_ATTEMPT -lt $MAX_KAFKA_ATTEMPTS ]; do
-  TOPICS=$(docker compose exec -T kafka kafka-topics --bootstrap-server kafka:29092 --list 2>/dev/null | grep -E "transfer-" | wc -l)
-  
-  if [ "$TOPICS" -eq 3 ]; then
-    echo "✅ All Kafka topics created!"
-    break
-  fi
-  
-  KAFKA_ATTEMPT=$((KAFKA_ATTEMPT + 1))
-  echo "  Attempt $KAFKA_ATTEMPT/$MAX_KAFKA_ATTEMPTS - Topics not ready ($TOPICS/3), waiting 2s..."
-  sleep 2
-done
-
-if [ $KAFKA_ATTEMPT -eq $MAX_KAFKA_ATTEMPTS ]; then
-  echo "❌ Kafka topics failed to create after $((MAX_KAFKA_ATTEMPTS * 2))s"
-  echo "❌ Aborting application startup"
-  exit 1
-fi
-
-# Wait for sample data to be initialized
-echo "⏳ Waiting for sample data to be initialized..."
+# THIRD: Wait for sample data initialization
+echo "⏳ Waiting for sample data initialization..."
 sleep 5
 
-echo "✅ All services ready!"
+echo "✅ All infrastructure ready!"
 echo ""
 echo "📦 Starting Bank Transfer API..."
 ./gradlew bootRun
