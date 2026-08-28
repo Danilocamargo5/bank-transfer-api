@@ -29,6 +29,18 @@ docker-compose exec localstack aws dynamodb put-item \
 echo "✅ Sample accounts created!"
 
 echo ""
+echo "Creating REST API Gateway..."
+API_ID=$(docker-compose exec -T localstack aws apigateway create-rest-api \
+  --name "bank-transfer-api" \
+  --endpoint-url http://localhost:4566 \
+  --region us-east-1 \
+  --query 'id' \
+  --output text 2>/dev/null)
+
+echo "✅ API Gateway created! ID: $API_ID"
+echo "Endpoint: http://localhost:4566/restapis/$API_ID/dev/api/v1/transfers"
+
+echo ""
 echo "=========================================="
 echo "✅ Infrastructure initialization complete"
 echo "=========================================="
