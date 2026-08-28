@@ -82,8 +82,7 @@ services:
     image: amazon/aws-cli:latest
     container_name: init-sample-data
     depends_on:
-      localstack:
-        condition: service_healthy
+      - localstack
     environment:
       AWS_ACCESS_KEY_ID: local
       AWS_SECRET_ACCESS_KEY: local
