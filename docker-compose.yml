@@ -5,13 +5,12 @@ services:
     ports:
       - "4566:4566"
     environment:
-      SERVICES: dynamodb,sqs,apigateway,s3
+      SERVICES: dynamodb,sqs
       DEBUG: 0
       DOCKER_HOST: unix:///var/run/docker.sock
       AWS_DEFAULT_REGION: us-east-1
       AWS_ACCESS_KEY_ID: local
       AWS_SECRET_ACCESS_KEY: local
-      DISABLE_MOTO_METRICS: "true"
       LOCALSTACK_HOSTNAME: localstack
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
@@ -42,7 +41,6 @@ services:
       CLUSTER_ID: MkwQo23dQ6SNiP1rvNV_IQ
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
-      KAFKA_LOG_RETENTION_BYTES: 1073741824
     networks:
       - bank-transfer-network
     healthcheck:
