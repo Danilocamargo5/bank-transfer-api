@@ -8,7 +8,7 @@ docker-compose up -d
 # Wait for kafka-init to complete (silently)
 echo "⏳ Initializing infrastructure..."
 
-MAX_WAIT=120
+MAX_WAIT=150
 ELAPSED=0
 
 while [ $ELAPSED -lt $MAX_WAIT ]; do
