@@ -57,47 +57,6 @@ services:
       retries: 15
       start_period: 45s
 
-  # Kafka Topics Initialization
-  kafka-init:
-    image: confluentinc/cp-kafka:7.5.0
-    container_name: kafka-init
-    depends_on:
-      kafka:
-        condition: service_healthy
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        echo "Waiting for Kafka broker..."
-        sleep 30
-        
-        echo "Attempting to create topics..."
-        
-        # Try up to 10 times
-        for attempt in 1 2 3 4 5 6 7 8 9 10; do
-          echo "Attempt $$attempt/10..."
-          
-          # Try to list topics - if it works, Kafka is ready
-          if kafka-topics --bootstrap-server kafka:29092 --list 2>/dev/null | grep -q "^"; then
-            echo "✅ Kafka is ready! Creating topics..."
-            
-            # Create topics one by one
-            kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-requested --partitions 3 --replication-factor 1
-            kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-completed --partitions 3 --replication-factor 1
-            kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-failed --partitions 1 --replication-factor 1
-            
-            echo "✅ Topics created!"
-            exit 0
-          fi
-          
-          echo "Kafka not ready, waiting 5s..."
-          sleep 5
-        done
-        
-        echo "❌ Failed after 10 attempts"
-        exit 1
-    networks:
-      - bank-transfer-network
-
   # Sample Data Initialization
   init-sample-data:
     image: amazon/aws-cli:latest
