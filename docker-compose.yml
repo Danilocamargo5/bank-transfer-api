@@ -57,7 +57,6 @@ services:
       retries: 10
       start_period: 30s
 
-  # Kafka Topics Initialization - runs after Kafka is healthy
   kafka-init:
     image: confluentinc/cp-kafka:7.5.0
     container_name: kafka-init
@@ -68,20 +67,13 @@ services:
     command:
       - |
         set -e
-        
-        echo "Kafka Topics Initialization..."
-        
-        # Wait just 30s for Kafka to stabilize after health check
-        sleep 30
-        
-        # Try to create topics - fail fast if it doesn't work
+        echo "Initializing Kafka topics..."
+        sleep 60
         echo "Creating topics..."
         kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-requested --partitions 3 --replication-factor 1
         kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-completed --partitions 3 --replication-factor 1
         kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-failed --partitions 1 --replication-factor 1
-        
-        echo "✅ Topics created!"
-        kafka-topics --bootstrap-server kafka:29092 --list
+        echo "✅ Kafka topics created!"
     networks:
       - bank-transfer-network
 
