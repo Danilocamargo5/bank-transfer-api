@@ -13,6 +13,7 @@ import com.danilo.banktransfer.domain.enums.Currency
 import com.danilo.banktransfer.domain.enums.TransferStatus
 import com.danilo.banktransfer.infrastructure.repository.AccountRepository
 import com.danilo.banktransfer.infrastructure.repository.TransferRepository
+import com.danilo.banktransfer.infrastructure.metrics.TransferMetrics
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.time.Instant
