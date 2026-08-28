@@ -53,9 +53,9 @@ services:
     healthcheck:
       test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "kafka:29092"]
       interval: 5s
-      timeout: 15s
-      retries: 25
-      start_period: 90s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
 
   # Kafka Topics Initialization - runs after Kafka is healthy
   kafka-init:
@@ -69,46 +69,19 @@ services:
       - |
         set -e
         
-        echo "=========================================="
-        echo "  Kafka Topics Initialization Started"
-        echo "=========================================="
+        echo "Kafka Topics Initialization..."
         
-        echo "Waiting 180s for Kafka to fully stabilize (KRaft takes time)..."
-        sleep 180
+        # Wait just 30s for Kafka to stabilize after health check
+        sleep 30
         
-        echo ""
-        echo "Creating Kafka topics..."
+        # Try to create topics - fail fast if it doesn't work
+        echo "Creating topics..."
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-requested --partitions 3 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-completed --partitions 3 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-failed --partitions 1 --replication-factor 1
         
-        # Try to create topics up to 5 times
-        RETRY=0
-        MAX_RETRIES=5
-        
-        while [ $$RETRY -lt $$MAX_RETRIES ]; do
-          RETRY=$$(( $$RETRY + 1 ))
-          echo "Attempt $$RETRY/$$MAX_RETRIES..."
-          
-          if kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-requested --partitions 3 --replication-factor 1 2>/dev/null && \
-             kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-completed --partitions 3 --replication-factor 1 2>/dev/null && \
-             kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-failed --partitions 1 --replication-factor 1 2>/dev/null; then
-            echo "✅ All topics created successfully!"
-            break
-          fi
-          
-          if [ $$RETRY -lt $$MAX_RETRIES ]; then
-            echo "Waiting 10s before retry..."
-            sleep 10
-          fi
-        done
-        
-        echo ""
-        echo "Verifying topics:"
-        sleep 5
+        echo "✅ Topics created!"
         kafka-topics --bootstrap-server kafka:29092 --list
-        
-        echo ""
-        echo "=========================================="
-        echo "✅ Kafka Topics Initialization Complete"
-        echo "=========================================="
     networks:
       - bank-transfer-network
 
