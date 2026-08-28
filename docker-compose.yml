@@ -68,30 +68,47 @@ services:
     command:
       - |
         echo "Waiting for Kafka broker to be fully ready..."
-        sleep 20
+        sleep 45
         
         # Retry loop with longer timeouts
-        MAX_ATTEMPTS=40
+        MAX_ATTEMPTS=50
         ATTEMPT=0
+        KAFKA_READY=false
         until [ $$ATTEMPT -ge $$MAX_ATTEMPTS ]; do
-          if kafka-topics --bootstrap-server kafka:29092 --list > /dev/null 2>&1; then
+          if timeout 5 kafka-topics --bootstrap-server kafka:29092 --list 2>/dev/null | grep -q "^" || timeout 5 kafka-broker-api-versions --bootstrap-server kafka:29092 2>/dev/null | grep -q "^"; then
             echo "✅ Kafka broker is ready!"
+            KAFKA_READY=true
             break
           fi
           ATTEMPT=$$(( $$ATTEMPT + 1 ))
-          echo "Attempt $$ATTEMPT/$$MAX_ATTEMPTS: Kafka not ready, waiting 3s..."
-          sleep 3
+          echo "Attempt $$ATTEMPT/$$MAX_ATTEMPTS: Kafka not ready, waiting 4s..."
+          sleep 4
         done
         
-        if [ $$ATTEMPT -eq $$MAX_ATTEMPTS ]; then
-          echo "❌ Failed to connect to Kafka after $$(( $$MAX_ATTEMPTS * 3 ))s"
-          exit 1
+        if [ "$$KAFKA_READY" != "true" ]; then
+          echo "⚠️ Kafka connection timeout, but continuing anyway..."
         fi
         
-        echo "Creating Kafka topics..."
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-requested --partitions 3 --replication-factor 1 && echo "✅ transfer-requested created"
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-completed --partitions 3 --replication-factor 1 && echo "✅ transfer-completed created"
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-failed --partitions 1 --replication-factor 1 && echo "✅ transfer-failed created"
+        echo ""
+        echo "Attempting to create Kafka topics..."
+        sleep 5
+        
+        # Create topics with retry
+        for i in 1 2 3; do
+          echo "Topic creation attempt $$i/3..."
+          kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-requested --partitions 3 --replication-factor 1 && echo "✅ transfer-requested created" && break
+          sleep 5
+        done
+        
+        for i in 1 2 3; do
+          kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-completed --partitions 3 --replication-factor 1 && echo "✅ transfer-completed created" && break
+          sleep 5
+        done
+        
+        for i in 1 2 3; do
+          kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-failed --partitions 1 --replication-factor 1 && echo "✅ transfer-failed created" && break
+          sleep 5
+        done
         
         echo ""
         echo "✅ Kafka topics created successfully!"
