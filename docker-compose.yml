@@ -1,30 +1,33 @@
+version: '3.8'
+
 services:
-  # LocalStack: AWS services emulation (DynamoDB, SQS, API Gateway) - v4.14.0 (last free version)
   localstack:
     image: localstack/localstack:4.14.0
     container_name: localstack
     ports:
-      - "4566:4566"      # LocalStack edge endpoint (all services)
+      - "4566:4566"
     environment:
       SERVICES: dynamodb,sqs,apigateway,s3
-      DEBUG: 1
+      DEBUG: 0
+      DATA_DIR: /tmp/localstack/data
+      DOCKER_HOST: unix:///var/run/docker.sock
+      AWS_DEFAULT_REGION: us-east-1
       AWS_ACCESS_KEY_ID: local
       AWS_SECRET_ACCESS_KEY: local
-      AWS_DEFAULT_REGION: us-east-1
-      DYNAMODB_SHARE_DB: "1"
-      DYNAMODB_STREAM_SPEC: "1"
+      DISABLE_MOTO_METRICS: "true"
+      LOCALSTACK_HOSTNAME: localstack
     volumes:
+      - "${TMPDIR:-.}/.localstack:/tmp/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
-      - "./scripts/init-localstack.sh:/docker-entrypoint-initaws.d/init-localstack.sh"
     networks:
       - bank-transfer-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
       interval: 5s
-      timeout: 5s
-      retries: 5
+      timeout: 10s
+      retries: 10
+      start_period: 30s
 
-  # Kafka: Event streaming (KRaft mode - no Zookeeper)
   kafka:
     image: confluentinc/cp-kafka:7.5.0
     container_name: kafka
@@ -36,17 +39,13 @@ services:
       KAFKA_NODE_ID: 1
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
       KAFKA_LISTENERS: PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093,PLAINTEXT_HOST://0.0.0.0:9092
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
       CLUSTER_ID: MkwQo23dQ6SNiP1rvNV_IQ
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
-      KAFKA_LOG_RETENTION_HOURS: 168
       KAFKA_LOG_RETENTION_BYTES: 1073741824
     networks:
       - bank-transfer-network
@@ -56,229 +55,6 @@ services:
       timeout: 10s
       retries: 10
       start_period: 30s
-
-  kafka-init:
-    image: confluentinc/cp-kafka:7.5.0
-    container_name: kafka-init
-    depends_on:
-      kafka:
-        condition: service_healthy
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        set -e
-        echo "Initializing Kafka topics..."
-        sleep 60
-        echo "Creating topics..."
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-requested --partitions 3 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-completed --partitions 3 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-failed --partitions 1 --replication-factor 1
-        echo "✅ Kafka topics created!"
-    networks:
-      - bank-transfer-network
-
-  # Sample Data Initialization
-  init-sample-data:
-    image: amazon/aws-cli:latest
-    container_name: init-sample-data
-    depends_on:
-      - localstack
-    environment:
-      AWS_ACCESS_KEY_ID: local
-      AWS_SECRET_ACCESS_KEY: local
-      AWS_DEFAULT_REGION: us-east-1
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        set -e
-        echo "Waiting for DynamoDB tables to be created..."
-        
-        MAX_ATTEMPTS=30
-        ATTEMPT=0
-        until [ $$ATTEMPT -ge $$MAX_ATTEMPTS ]; do
-          if aws dynamodb describe-table --table-name accounts --endpoint-url http://localstack:4566 2>/dev/null | grep -q "TableArn"; then
-            echo "✅ Accounts table is ready!"
-            break
-          fi
-          ATTEMPT=$$(( $$ATTEMPT + 1 ))
-          echo "Attempt $$ATTEMPT/$$MAX_ATTEMPTS: Waiting for DynamoDB..."
-          sleep 1
-        done
-        
-        if [ $$ATTEMPT -eq $$MAX_ATTEMPTS ]; then
-          echo "❌ Failed to connect to DynamoDB after $$(( $$MAX_ATTEMPTS ))s"
-          exit 1
-        fi
-        
-        echo ""
-        echo "Creating sample test accounts..."
-        
-        # Create acc-001
-        aws dynamodb put-item \
-          --table-name accounts \
-          --item '{"accountId": {"S": "acc-001"}, "balance": {"N": "5000.00"}, "currency": {"S": "BRL"}, "status": {"S": "ACTIVE"}, "customerName": {"S": "João Silva"}}' \
-          --endpoint-url http://localstack:4566 && echo "✅ acc-001 created" || echo "❌ Failed to create acc-001"
-        
-        # Create acc-002
-        aws dynamodb put-item \
-          --table-name accounts \
-          --item '{"accountId": {"S": "acc-002"}, "balance": {"N": "1000.00"}, "currency": {"S": "BRL"}, "status": {"S": "ACTIVE"}, "customerName": {"S": "Maria Santos"}}' \
-          --endpoint-url http://localstack:4566 && echo "✅ acc-002 created" || echo "❌ Failed to create acc-002"
-        
-        # Create acc-003
-        aws dynamodb put-item \
-          --table-name accounts \
-          --item '{"accountId": {"S": "acc-003"}, "balance": {"N": "3500.00"}, "currency": {"S": "BRL"}, "status": {"S": "ACTIVE"}, "customerName": {"S": "Pedro Costa"}}' \
-          --endpoint-url http://localstack:4566 && echo "✅ acc-003 created" || echo "❌ Failed to create acc-003"
-        
-        # Create acc-000 (inactive)
-        aws dynamodb put-item \
-          --table-name accounts \
-          --item '{"accountId": {"S": "acc-000"}, "balance": {"N": "0.00"}, "currency": {"S": "BRL"}, "status": {"S": "INACTIVE"}, "customerName": {"S": "Conta Encerrada"}}' \
-          --endpoint-url http://localstack:4566 && echo "✅ acc-000 (inactive) created" || echo "❌ Failed to create acc-000"
-        
-        echo ""
-        echo "✅ Sample data initialization complete!"
-        echo ""
-        echo "Current accounts:"
-        aws dynamodb scan --table-name accounts --endpoint-url http://localstack:4566 --query 'Items[*].[accountId.S, balance.N]' --output table
-    networks:
-      - bank-transfer-network
-  # Kafka Topics Initialization
-  # dynamodb-admin:
-  #   image: aaronshaf/dynamodb-admin:latest
-  #   container_name: dynamodb-admin
-  #   ports:
-  #     - "8001:8001"
-  #   depends_on:
-  #     localstack:
-  #       condition: service_healthy
-  #   environment:
-  #     DYNAMO_ENDPOINT: http://localstack:4566
-  #     AWS_REGION: us-east-1
-  #     AWS_ACCESS_KEY_ID: local
-  #     AWS_SECRET_ACCESS_KEY: local
-  #   networks:
-  #     - bank-transfer-network
-  #   healthcheck:
-  #     test: ["CMD", "curl", "-f", "http://localhost:8001/"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
-
-  # API Gateway Initialization
-  init-api-gateway:
-    image: amazon/aws-cli:latest
-    container_name: init-api-gateway
-    depends_on:
-      localstack:
-        condition: service_healthy
-    environment:
-      AWS_ACCESS_KEY_ID: local
-      AWS_SECRET_ACCESS_KEY: local
-      AWS_DEFAULT_REGION: us-east-1
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        echo "Waiting for API Gateway to be ready..."
-        sleep 10
-        
-        echo "Creating API Gateway REST API..."
-        API_ID=$$(aws apigateway create-rest-api \
-          --name "bank-transfer-api" \
-          --description "Bank Transfer API Gateway" \
-          --endpoint-url http://localstack:4566 \
-          --region us-east-1 \
-          --query 'id' \
-          --output text)
-        
-        echo "✓ API created with ID: $$API_ID"
-        
-        ROOT_ID=$$(aws apigateway get-resources \
-          --rest-api-id $$API_ID \
-          --endpoint-url http://localstack:4566 \
-          --region us-east-1 \
-          --query 'items[0].id' \
-          --output text)
-        
-        API_RESOURCE=$$(aws apigateway create-resource \
-          --rest-api-id $$API_ID \
-          --parent-id $$ROOT_ID \
-          --path-part "api" \
-          --endpoint-url http://localstack:4566 \
-          --region us-east-1 \
-          --query 'id' \
-          --output text)
-        
-        V1_RESOURCE=$$(aws apigateway create-resource \
-          --rest-api-id $$API_ID \
-          --parent-id $$API_RESOURCE \
-          --path-part "v1" \
-          --endpoint-url http://localstack:4566 \
-          --region us-east-1 \
-          --query 'id' \
-          --output text)
-        
-        TRANSFERS_RESOURCE=$$(aws apigateway create-resource \
-          --rest-api-id $$API_ID \
-          --parent-id $$V1_RESOURCE \
-          --path-part "transfers" \
-          --endpoint-url http://localstack:4566 \
-          --region us-east-1 \
-          --query 'id' \
-          --output text)
-        
-        aws apigateway put-method \
-          --rest-api-id $$API_ID \
-          --resource-id $$TRANSFERS_RESOURCE \
-          --http-method POST \
-          --authorization-type NONE \
-          --endpoint-url http://localstack:4566 \
-          --region us-east-1 > /dev/null
-        
-        aws apigateway put-integration \
-          --rest-api-id $$API_ID \
-          --resource-id $$TRANSFERS_RESOURCE \
-          --http-method POST \
-          --type HTTP \
-          --integration-http-method POST \
-          --uri "http://host.docker.internal:8080/api/v1/transfers" \
-          --endpoint-url http://localstack:4566 \
-          --region us-east-1 > /dev/null
-        
-        aws apigateway put-method-response \
-          --rest-api-id $$API_ID \
-          --resource-id $$TRANSFERS_RESOURCE \
-          --http-method POST \
-          --status-code 200 \
-          --response-models '{"application/json":"Empty"}' \
-          --response-parameters '{"method.response.header.Content-Type": true}' \
-          --endpoint-url http://localstack:4566 \
-          --region us-east-1 > /dev/null
-        
-        aws apigateway put-integration-response \
-          --rest-api-id $$API_ID \
-          --resource-id $$TRANSFERS_RESOURCE \
-          --http-method POST \
-          --status-code 200 \
-          --response-templates '{"application/json": "$input.json($$)"}' \
-          --response-parameters '{"method.response.header.Content-Type": "integration.response.header.Content-Type"}' \
-          --endpoint-url http://localstack:4566 \
-          --region us-east-1 > /dev/null
-        
-        DEPLOYMENT_ID=$$(aws apigateway create-deployment \
-          --rest-api-id $$API_ID \
-          --stage-name dev \
-          --endpoint-url http://localstack:4566 \
-          --region us-east-1 \
-          --query 'id' \
-          --output text)
-        
-        echo "✓ Deployment created: $$DEPLOYMENT_ID"
-        echo "✅ API Gateway setup complete!"
-        echo "API Endpoint: http://localhost:4566/restapis/$$API_ID/dev/api/v1/transfers"
-    networks:
-      - bank-transfer-network
 
 networks:
   bank-transfer-network:
