@@ -54,8 +54,8 @@ services:
       test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "kafka:29092"]
       interval: 5s
       timeout: 10s
-      retries: 15
-      start_period: 30s
+      retries: 20
+      start_period: 60s
 
   # Kafka Topics Initialization
   kafka-init:
@@ -68,9 +68,10 @@ services:
     command:
       - |
         echo "Waiting for Kafka broker to be fully ready..."
+        sleep 20
         
-        # Retry loop to ensure Kafka is ready
-        MAX_ATTEMPTS=30
+        # Retry loop with longer timeouts
+        MAX_ATTEMPTS=40
         ATTEMPT=0
         until [ $$ATTEMPT -ge $$MAX_ATTEMPTS ]; do
           if kafka-topics --bootstrap-server kafka:29092 --list > /dev/null 2>&1; then
@@ -78,12 +79,12 @@ services:
             break
           fi
           ATTEMPT=$$(( $$ATTEMPT + 1 ))
-          echo "Attempt $$ATTEMPT/$$MAX_ATTEMPTS: Kafka not ready, retrying in 2s..."
-          sleep 2
+          echo "Attempt $$ATTEMPT/$$MAX_ATTEMPTS: Kafka not ready, waiting 3s..."
+          sleep 3
         done
         
         if [ $$ATTEMPT -eq $$MAX_ATTEMPTS ]; then
-          echo "❌ Failed to connect to Kafka after $$(( $$MAX_ATTEMPTS * 2 ))s"
+          echo "❌ Failed to connect to Kafka after $$(( $$MAX_ATTEMPTS * 3 ))s"
           exit 1
         fi
         
