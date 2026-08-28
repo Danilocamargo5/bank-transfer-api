@@ -7,7 +7,6 @@ services:
     environment:
       SERVICES: dynamodb,sqs,apigateway,s3
       DEBUG: 0
-      DATA_DIR: /tmp/localstack/data
       DOCKER_HOST: unix:///var/run/docker.sock
       AWS_DEFAULT_REGION: us-east-1
       AWS_ACCESS_KEY_ID: local
@@ -15,7 +14,6 @@ services:
       DISABLE_MOTO_METRICS: "true"
       LOCALSTACK_HOSTNAME: localstack
     volumes:
-      - "${TMPDIR:-.}/.localstack:/tmp/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
     networks:
       - bank-transfer-network
