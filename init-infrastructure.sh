@@ -5,8 +5,8 @@ set -e
 echo "🚀 Starting infrastructure containers..."
 docker-compose up -d kafka localstack
 
-echo "⏳ Waiting for Kafka to be ready..."
-sleep 90
+echo "⏳ Waiting for LocalStack and Kafka to be ready..."
+sleep 120
 
 echo "Creating Kafka topics..."
 docker-compose exec kafka kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-requested --partitions 3 --replication-factor 1
