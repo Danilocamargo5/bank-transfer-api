@@ -54,8 +54,8 @@ services:
       test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "kafka:29092"]
       interval: 5s
       timeout: 10s
-      retries: 20
-      start_period: 60s
+      retries: 15
+      start_period: 45s
 
   # Kafka Topics Initialization
   kafka-init:
@@ -67,53 +67,34 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        echo "Waiting for Kafka broker to be fully ready..."
-        sleep 45
+        echo "Waiting for Kafka broker..."
+        sleep 30
         
-        # Retry loop with longer timeouts
-        MAX_ATTEMPTS=50
-        ATTEMPT=0
-        KAFKA_READY=false
-        until [ $$ATTEMPT -ge $$MAX_ATTEMPTS ]; do
-          if timeout 5 kafka-topics --bootstrap-server kafka:29092 --list 2>/dev/null | grep -q "^" || timeout 5 kafka-broker-api-versions --bootstrap-server kafka:29092 2>/dev/null | grep -q "^"; then
-            echo "✅ Kafka broker is ready!"
-            KAFKA_READY=true
-            break
+        echo "Attempting to create topics..."
+        
+        # Try up to 10 times
+        for attempt in 1 2 3 4 5 6 7 8 9 10; do
+          echo "Attempt $$attempt/10..."
+          
+          # Try to list topics - if it works, Kafka is ready
+          if kafka-topics --bootstrap-server kafka:29092 --list 2>/dev/null | grep -q "^"; then
+            echo "✅ Kafka is ready! Creating topics..."
+            
+            # Create topics one by one
+            kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-requested --partitions 3 --replication-factor 1
+            kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-completed --partitions 3 --replication-factor 1
+            kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-failed --partitions 1 --replication-factor 1
+            
+            echo "✅ Topics created!"
+            exit 0
           fi
-          ATTEMPT=$$(( $$ATTEMPT + 1 ))
-          echo "Attempt $$ATTEMPT/$$MAX_ATTEMPTS: Kafka not ready, waiting 4s..."
-          sleep 4
-        done
-        
-        if [ "$$KAFKA_READY" != "true" ]; then
-          echo "⚠️ Kafka connection timeout, but continuing anyway..."
-        fi
-        
-        echo ""
-        echo "Attempting to create Kafka topics..."
-        sleep 5
-        
-        # Create topics with retry
-        for i in 1 2 3; do
-          echo "Topic creation attempt $$i/3..."
-          kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-requested --partitions 3 --replication-factor 1 && echo "✅ transfer-requested created" && break
+          
+          echo "Kafka not ready, waiting 5s..."
           sleep 5
         done
         
-        for i in 1 2 3; do
-          kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-completed --partitions 3 --replication-factor 1 && echo "✅ transfer-completed created" && break
-          sleep 5
-        done
-        
-        for i in 1 2 3; do
-          kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-failed --partitions 1 --replication-factor 1 && echo "✅ transfer-failed created" && break
-          sleep 5
-        done
-        
-        echo ""
-        echo "✅ Kafka topics created successfully!"
-        echo "Topics:"
-        kafka-topics --bootstrap-server kafka:29092 --list
+        echo "❌ Failed after 10 attempts"
+        exit 1
     networks:
       - bank-transfer-network
 
