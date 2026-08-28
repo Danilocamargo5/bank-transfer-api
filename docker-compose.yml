@@ -83,29 +83,27 @@ services:
         RETRY=0
         MAX_RETRIES=5
         
-        while [ $RETRY -lt $MAX_RETRIES ]; do
-          RETRY=$((RETRY + 1))
-          echo "Attempt $RETRY/$MAX_RETRIES..."
+        while [ $$RETRY -lt $$MAX_RETRIES ]; do
+          RETRY=$$(( $$RETRY + 1 ))
+          echo "Attempt $$RETRY/$$MAX_RETRIES..."
           
-          if kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-requested --partitions 3 --replication-factor 1 --command-config /dev/null 2>/dev/null || true; then
-            if kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-completed --partitions 3 --replication-factor 1 2>/dev/null || true; then
-              if kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-failed --partitions 1 --replication-factor 1 2>/dev/null || true; then
-                echo "✅ Topics creation completed!"
-                break
-              fi
-            fi
+          if kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-requested --partitions 3 --replication-factor 1 2>/dev/null && \
+             kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-completed --partitions 3 --replication-factor 1 2>/dev/null && \
+             kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic transfer-failed --partitions 1 --replication-factor 1 2>/dev/null; then
+            echo "✅ All topics created successfully!"
+            break
           fi
           
-          if [ $RETRY -lt $MAX_RETRIES ]; then
+          if [ $$RETRY -lt $$MAX_RETRIES ]; then
             echo "Waiting 10s before retry..."
             sleep 10
           fi
         done
         
         echo ""
-        echo "Listing topics:"
+        echo "Verifying topics:"
         sleep 5
-        kafka-topics --bootstrap-server kafka:29092 --list || echo "Could not list topics"
+        kafka-topics --bootstrap-server kafka:29092 --list
         
         echo ""
         echo "=========================================="
