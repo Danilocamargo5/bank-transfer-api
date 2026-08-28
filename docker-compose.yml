@@ -73,8 +73,8 @@ services:
         echo "  Kafka Topics Initialization Started"
         echo "=========================================="
         
-        echo "Waiting 90s for Kafka to fully stabilize..."
-        sleep 90
+        echo "Waiting 180s for Kafka to fully stabilize (KRaft takes time)..."
+        sleep 180
         
         echo ""
         echo "Creating Kafka topics..."
