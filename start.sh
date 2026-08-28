@@ -27,10 +27,10 @@ if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
   exit 1
 fi
 
-# Wait for Kafka topics to be created
+# Wait for Kafka topics to be created (up to 5 min)
 echo "⏳ Waiting for Kafka topics to be created..."
 
-MAX_KAFKA_ATTEMPTS=120
+MAX_KAFKA_ATTEMPTS=150
 KAFKA_ATTEMPT=0
 
 while [ $KAFKA_ATTEMPT -lt $MAX_KAFKA_ATTEMPTS ]; do
