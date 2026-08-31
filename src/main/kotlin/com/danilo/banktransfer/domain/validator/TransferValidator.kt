@@ -50,5 +50,8 @@ object TransferValidator {
         if (currency.length != 3) {
             throw InvalidTransferException("currency must be a 3-letter code (e.g., BRL)")
         }
+        if (currency != "BRL") {
+            throw InvalidTransferException("only BRL currency is supported")
+        }
     }
 }
