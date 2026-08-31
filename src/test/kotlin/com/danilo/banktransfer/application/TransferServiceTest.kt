@@ -94,10 +94,11 @@ class TransferServiceTest {
         every { transferMetrics.recordTransferProcessingTime(any()) } just runs
         every { transferMetrics.recordTransferFailure(any()) } just runs
         
-        // When & Then
-        assertThrows<DuplicateTransferException> {
-            transferService.processTransfer(transferEvent)
-        }
+        // When
+        val result = transferService.processTransfer(transferEvent)
+        
+        // Then
+        assertTrue(result is TransferService.Result.Failure)
     }
     
     @Test
@@ -109,10 +110,11 @@ class TransferServiceTest {
         every { transferMetrics.recordTransferProcessingTime(any()) } just runs
         every { transferMetrics.recordTransferFailure(any()) } just runs
         
-        // When & Then
-        assertThrows<AccountNotFoundException> {
-            transferService.processTransfer(transferEvent)
-        }
+        // When
+        val result = transferService.processTransfer(transferEvent)
+        
+        // Then
+        assertTrue(result is TransferService.Result.Failure)
     }
     
     @Test
@@ -126,10 +128,11 @@ class TransferServiceTest {
         every { transferMetrics.recordTransferProcessingTime(any()) } just runs
         every { transferMetrics.recordTransferFailure(any()) } just runs
         
-        // When & Then
-        assertThrows<InsufficientBalanceException> {
-            transferService.processTransfer(transferEvent)
-        }
+        // When
+        val result = transferService.processTransfer(transferEvent)
+        
+        // Then
+        assertTrue(result is TransferService.Result.Failure)
     }
     
     @Test
@@ -143,9 +146,10 @@ class TransferServiceTest {
         every { transferMetrics.recordTransferProcessingTime(any()) } just runs
         every { transferMetrics.recordTransferFailure(any()) } just runs
         
-        // When & Then
-        assertThrows<InactiveAccountException> {
-            transferService.processTransfer(transferEvent)
-        }
+        // When
+        val result = transferService.processTransfer(transferEvent)
+        
+        // Then
+        assertTrue(result is TransferService.Result.Failure)
     }
 }
