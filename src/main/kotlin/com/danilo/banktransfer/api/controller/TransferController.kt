@@ -4,13 +4,10 @@ import com.danilo.banktransfer.domain.dto.TransferRequestDTO
 import com.danilo.banktransfer.domain.dto.TransferResponseDTO
 import com.danilo.banktransfer.domain.validator.TransferValidator
 import com.danilo.banktransfer.infrastructure.repository.TransferRepository
-import com.danilo.banktransfer.infrastructure.metrics.TransferMetrics
 import com.danilo.banktransfer.application.exception.TransferException
-import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
-import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -21,10 +18,7 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 @RequestMapping("/api/v1/transfers")
 class TransferController(
-    private val kafkaTemplate: KafkaTemplate<String, String>,
-    private val transferRepository: TransferRepository,
-    private val objectMapper: ObjectMapper,
-    private val transferMetrics: TransferMetrics
+    private val transferRepository: TransferRepository
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -36,23 +30,17 @@ class TransferController(
             // Validate request
             TransferValidator.validate(request)
             
-            // Publish to Kafka for async processing
-            val message = objectMapper.writeValueAsString(request)
-            kafkaTemplate.send("transfer-requested", request.transferId, message)
-            transferMetrics.recordKafkaPublish("transfer-requested", true)
-
-            logger.info("Transfer request published to Kafka: ${request.transferId}")
+            logger.info("Transfer request validated: ${request.transferId}")
 
             ResponseEntity.status(HttpStatus.ACCEPTED).body(
                 TransferResponseDTO(
                     transferId = request.transferId,
                     status = "PENDING",
-                    message = "Transfer request received and queued for processing"
+                    message = "Transfer request received. Use external script to publish to Kafka"
                 )
             )
         } catch (e: TransferException) {
             logger.error("Validation error: ${e.message}")
-            transferMetrics.recordKafkaPublish("transfer-requested", false)
             ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
                 TransferResponseDTO(
                     transferId = request.transferId,
@@ -61,8 +49,7 @@ class TransferController(
                 )
             )
         } catch (e: Exception) {
-            logger.error("Error publishing transfer request: ${e.message}", e)
-            transferMetrics.recordKafkaPublish("transfer-requested", false)
+            logger.error("Error processing transfer request: ${e.message}", e)
             ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
                 TransferResponseDTO(
                     transferId = request.transferId,
