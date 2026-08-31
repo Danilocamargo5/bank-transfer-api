@@ -15,7 +15,7 @@ sudo rm -rf /tmp/localstack
 git pull origin develop
 
 # Start everything automatically
-./scripts/full-setup.sh
+./full-setup.sh
 # Wait for "✅ Infrastructure Ready!" message
 ```
 
