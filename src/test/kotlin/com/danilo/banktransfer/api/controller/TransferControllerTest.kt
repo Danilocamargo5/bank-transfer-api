@@ -38,8 +38,8 @@ class TransferControllerTest {
     fun setup() {
         kafkaTemplate = mockk()
         transferRepository = mockk()
-        objectMapper = ObjectMapper()
         transferMetrics = mockk()
+        objectMapper = ObjectMapper().also { it.registerModule(com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()) }
         transferController = TransferController(
             kafkaTemplate, 
             transferRepository, 

@@ -38,7 +38,7 @@ class TransferKafkaConsumerTest {
         transferService = mockk()
         kafkaTemplate = mockk()
         sqsPublisher = mockk()
-        objectMapper = ObjectMapper()
+        objectMapper = ObjectMapper().also { it.registerModule(com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()) }
         consumer = TransferKafkaConsumer(transferService, kafkaTemplate, sqsPublisher, objectMapper)
     }
     
