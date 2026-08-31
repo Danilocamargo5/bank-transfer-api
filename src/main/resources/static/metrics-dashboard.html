@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bank Transfer API - Metrics Dashboard</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -130,8 +129,41 @@
             color: #333;
         }
 
-        canvas {
-            max-height: 300px;
+        .chart-bars {
+            display: flex;
+            gap: 40px;
+            align-items: flex-end;
+            height: 300px;
+            margin: 20px 0;
+        }
+
+        .bar-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .bar {
+            width: 80px;
+            background: linear-gradient(to top, #10b981, #059669);
+            border-radius: 5px;
+            transition: all 0.3s;
+            min-height: 10px;
+        }
+
+        .bar.failure {
+            background: linear-gradient(to top, #ef4444, #dc2626);
+        }
+
+        .bar-label {
+            font-weight: bold;
+            color: #666;
+        }
+
+        .bar-pct {
+            font-size: 18px;
+            font-weight: bold;
         }
 
         .error-types {
@@ -203,19 +235,6 @@
         .error-message.show {
             display: block;
         }
-
-        @keyframes pulse {
-            0%, 100% {
-                opacity: 1;
-            }
-            50% {
-                opacity: 0.5;
-            }
-        }
-
-        .loading-dot {
-            animation: pulse 1.5s infinite;
-        }
     </style>
 </head>
 <body>
@@ -256,12 +275,18 @@
         <div class="charts-section">
             <div class="chart-card">
                 <h3>📊 Taxa de Sucesso vs Falha</h3>
-                <canvas id="successFailureChart"></canvas>
-            </div>
-
-            <div class="chart-card">
-                <h3>⏱️ Tempo de Processamento (últimas 10)</h3>
-                <canvas id="timingChart"></canvas>
+                <div class="chart-bars">
+                    <div class="bar-container">
+                        <div id="success-bar" class="bar" style="height: 0px;"></div>
+                        <div class="bar-label">Sucesso</div>
+                        <div class="bar-pct" id="success-pct" style="color: #10b981;">0%</div>
+                    </div>
+                    <div class="bar-container">
+                        <div id="failure-bar" class="bar failure" style="height: 0px;"></div>
+                        <div class="bar-label">Falha</div>
+                        <div class="bar-pct" id="failure-pct" style="color: #ef4444;">0%</div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -273,11 +298,9 @@
     </div>
 
     <script>
-        // Detecta o host automaticamente (funciona com localhost ou Codespaces)
         const host = window.location.hostname;
         const protocol = window.location.protocol;
         
-        // Se tá em github.dev (Codespaces), muda a porta de 8888 pra 8080
         let API_URL;
         if (host.includes('github.dev')) {
             const baseHost = host.replace('-8888.', '-8080.');
@@ -289,8 +312,6 @@
         const METRICS_URL = `${API_URL}/actuator/metrics`;
         const HEALTH_URL = `${API_URL}/actuator/health`;
 
-        let successFailureChart = null;
-        let timingChart = null;
         let timingDataArray = [];
         let errorCounts = {};
         let connectionSuccessful = false;
@@ -307,7 +328,6 @@
                 const timingData = timingResp.ok ? await timingResp.json() : null;
                 const healthData = healthResp.ok ? await healthResp.json() : null;
 
-                // If we got ANY data, clear error (connection is working)
                 const hasAnyData = successData || failureData || timingData || healthData;
                 if (hasAnyData) {
                     clearError();
@@ -318,7 +338,7 @@
                 
             } catch (error) {
                 if (!connectionSuccessful) {
-                    showError('Não consegui conectar ao servidor. Certifique-se que a app está rodando em http://localhost:8080');
+                    showError('Não consegui conectar ao servidor. Certifique-se que a app está rodando');
                 }
                 console.error('Error:', error);
             }
@@ -331,7 +351,6 @@
             document.getElementById('success-count').textContent = Math.floor(successCount);
             document.getElementById('failure-count').textContent = Math.floor(failureCount);
 
-            // Update timing - CORRIGIDO: usar timingDataArray (global)
             if (timingData) {
                 const measurements = timingData.measurements;
                 const count = measurements.find(m => m.statistic === 'COUNT')?.value || 0;
@@ -346,7 +365,6 @@
                 }
             }
 
-            // Update health
             if (healthData) {
                 const status = healthData.status === 'UP' ? '✅ UP' : '❌ DOWN';
                 const statusClass = healthData.status === 'UP' ? 'status-up' : 'status-down';
@@ -354,7 +372,6 @@
                 document.getElementById('health-label').textContent = healthData.status === 'UP' ? 'Aplicação rodando' : 'Aplicação offline';
             }
 
-            // Extract error types
             if (failureData?.availableTags) {
                 const errorTag = failureData.availableTags.find(t => t.tag === 'error_type');
                 if (errorTag) {
@@ -370,71 +387,19 @@
         }
 
         function updateCharts(successCount, failureCount) {
-            try {
-                const ctx1 = document.getElementById('successFailureChart');
-                const ctx2 = document.getElementById('timingChart');
-
-                if (!ctx1 || !ctx2) {
-                    console.warn('Canvas elements not found');
-                    return;
-                }
-
-                // Destroy existing charts if they exist
-                if (window.successFailureChart && window.successFailureChart.destroy) {
-                    window.successFailureChart.destroy();
-                }
-                if (window.timingChart && window.timingChart.destroy) {
-                    window.timingChart.destroy();
-                }
-
-                // Success/Failure Chart
-                window.successFailureChart = new Chart(ctx1, {
-                    type: 'doughnut',
-                    data: {
-                        labels: ['Sucesso', 'Falha'],
-                        datasets: [{
-                            data: [successCount, failureCount],
-                            backgroundColor: ['#10b981', '#ef4444'],
-                            borderColor: ['#059669', '#dc2626'],
-                            borderWidth: 2
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        plugins: {
-                            legend: {
-                                position: 'bottom'
-                            }
-                        }
-                    }
-                });
-
-                // Timing Chart
-                window.timingChart = new Chart(ctx2, {
-                    type: 'line',
-                    data: {
-                        labels: Array.from({length: timingDataArray.length || 1}, (_, i) => i + 1),
-                        datasets: [{
-                            label: 'Tempo (ms)',
-                            data: timingDataArray.length > 0 ? timingDataArray : [0],
-                            borderColor: '#f59e0b',
-                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                            tension: 0.4,
-                            fill: true
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        scales: {
-                            y: {
-                                beginAtZero: true
-                            }
-                        }
-                    }
-                });
-            } catch (error) {
-                console.error('Chart rendering error:', error);
-            }
+            const total = successCount + failureCount;
+            const successPct = total > 0 ? Math.round((successCount / total) * 100) : 0;
+            const failurePct = total > 0 ? Math.round((failureCount / total) * 100) : 0;
+            
+            const maxHeight = 250;
+            const maxCount = Math.max(successCount, failureCount);
+            const successHeight = maxCount > 0 ? (successCount / maxCount) * maxHeight : 0;
+            const failureHeight = maxCount > 0 ? (failureCount / maxCount) * maxHeight : 0;
+            
+            document.getElementById('success-bar').style.height = successHeight + 'px';
+            document.getElementById('failure-bar').style.height = failureHeight + 'px';
+            document.getElementById('success-pct').textContent = successPct + '%';
+            document.getElementById('failure-pct').textContent = failurePct + '%';
         }
 
         function updateErrorTypes() {
@@ -467,10 +432,7 @@
             errorContainer.classList.remove('show');
         }
 
-        // Initial fetch
         fetchMetrics();
-
-        // Auto-refresh every 2 seconds
         setInterval(fetchMetrics, 2000);
     </script>
 </body>
