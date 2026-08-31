@@ -9,6 +9,7 @@ import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.runs
+import io.mockk.justRuns
 import io.mockk.verify
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.BeforeEach
