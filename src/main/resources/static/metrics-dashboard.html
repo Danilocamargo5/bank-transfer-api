@@ -279,10 +279,17 @@
         const host = window.location.hostname;
         const protocol = window.location.protocol;
         
-        // Se tá em github.dev, usa o mesmo protocolo/host. Se é localhost, tenta 8080
-        const API_URL = host.includes('github.dev') 
-            ? `${protocol}//${host}`
-            : `http://localhost:8080`;
+        // Se tá em github.dev (Codespaces), muda a porta de 8888 pra 8080
+        let API_URL;
+        if (host.includes('github.dev')) {
+            // Em Codespaces: https://psychic-pancake-wvgjw67w-8888.app.github.dev
+            // Muda pra: https://psychic-pancake-wvgjw67w-8080.app.github.dev
+            const baseHost = host.replace('-8888.', '-8080.');
+            API_URL = `${protocol}//${baseHost}`;
+        } else {
+            // Em localhost
+            API_URL = `http://localhost:8080`;
+        }
         
         const METRICS_URL = `${API_URL}/actuator/metrics`;
         const HEALTH_URL = `${API_URL}/actuator/health`;
