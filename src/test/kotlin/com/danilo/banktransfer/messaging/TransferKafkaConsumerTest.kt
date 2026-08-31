@@ -55,7 +55,7 @@ class TransferKafkaConsumerTest {
         )
         
         every { transferService.processTransfer(any()) } returns TransferService.Result.Success(successEvent)
-        every { kafkaTemplate.send(any(), any(), any()) } returns mockk()
+        every { kafkaTemplate.send(any(), any(), any()) } returns mockk(relaxed = true)
         
         // When
         consumer.consumeTransferRequest(validMessage)

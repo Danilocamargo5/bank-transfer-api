@@ -51,7 +51,7 @@ class TransferControllerTest {
     @Test
     fun `should accept valid transfer request`() {
         // Given
-        every { kafkaTemplate.send(any(), any(), any()) } returns mockk()
+        every { kafkaTemplate.send(any(), any(), any()) } returns mockk(relaxed = true)
         every { transferMetrics.recordKafkaPublish(any(), any()) } just runs
         
         // When
