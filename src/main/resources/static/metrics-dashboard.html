@@ -293,7 +293,7 @@
         let timingChart = null;
         let timingDataArray = [];
         let errorCounts = {};
-        let hasConnectedOnce = false;
+        let connectionSuccessful = false;
 
         async function fetchMetrics() {
             try {
@@ -307,14 +307,17 @@
                 const timingData = timingResp.ok ? await timingResp.json() : null;
                 const healthData = healthResp.ok ? await healthResp.json() : null;
 
+                // If we got ANY data, clear error (connection is working)
+                const hasAnyData = successData || failureData || timingData || healthData;
+                if (hasAnyData) {
+                    clearError();
+                    connectionSuccessful = true;
+                }
+
                 updateDashboard(successData, failureData, timingData, healthData);
                 
-                if (!hasConnectedOnce) {
-                    clearError();
-                    hasConnectedOnce = true;
-                }
             } catch (error) {
-                if (!hasConnectedOnce) {
+                if (!connectionSuccessful) {
                     showError('Não consegui conectar ao servidor. Certifique-se que a app está rodando em http://localhost:8080');
                 }
                 console.error('Error:', error);
