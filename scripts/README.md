@@ -50,10 +50,8 @@ git pull origin develop
 
 ### Terminal 4: View Dashboard
 ```bash
-# Serve dashboard files
-python3 -m http.server 8888
-
-# Open in browser: http://localhost:8888/metrics-dashboard.html
+# Dashboard is automatically served by Spring Boot
+# Open in browser: http://localhost:8080/metrics-dashboard.html
 ```
 
 ## Manual Setup (Step-by-step)

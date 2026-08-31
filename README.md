@@ -61,8 +61,7 @@ TransferKafkaConsumer
 ./full-setup.sh
 ./scripts/start-app.sh
 ./scripts/DEMO2.sh
-python3 -m http.server 8888
-# Open: http://localhost:8888/metrics-dashboard.html
+# Open: http://localhost:8080/metrics-dashboard.html
 ```
 
 For detailed setup instructions, see [Setup Guide](./SETUP.md) or [Scripts Documentation](./scripts/README.md)
