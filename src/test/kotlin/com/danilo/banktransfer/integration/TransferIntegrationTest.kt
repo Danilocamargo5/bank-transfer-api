@@ -62,9 +62,10 @@ class TransferIntegrationTest {
     
     @Test
     fun `should successfully process a valid transfer`() {
-        // Given
+        // Given - use unique ID per test run
+        val uniqueId = java.util.UUID.randomUUID().toString()
         val event = TransferRequestedEvent(
-            transferId = "tf-integration-001",
+            transferId = "tf-$uniqueId",
             sourceAccountId = "acc-test-001",
             destinationAccountId = "acc-test-002",
             amount = BigDecimal("100.00"),
@@ -79,7 +80,7 @@ class TransferIntegrationTest {
         assertTrue(result is TransferService.Result.Success)
         
         // Verify transfer was recorded
-        val transfers = transferRepository.findByTransferId("tf-integration-001")
+        val transfers = transferRepository.findByTransferId("tf-$uniqueId")
         assertEquals(1, transfers.size)
         assertEquals(TransferStatus.COMPLETED, transfers[0].status)
         
@@ -92,9 +93,10 @@ class TransferIntegrationTest {
     
     @Test
     fun `should fail transfer due to insufficient balance`() {
-        // Given
+        // Given - use unique ID per test run
+        val uniqueId = java.util.UUID.randomUUID().toString()
         val event = TransferRequestedEvent(
-            transferId = "tf-integration-002",
+            transferId = "tf-$uniqueId",
             sourceAccountId = "acc-test-001",
             destinationAccountId = "acc-test-002",
             amount = BigDecimal("10000.00"),
@@ -109,7 +111,7 @@ class TransferIntegrationTest {
         assertTrue(result is TransferService.Result.Failure)
         
         // Verify transfer was recorded as failed
-        val transfers = transferRepository.findByTransferId("tf-integration-002")
+        val transfers = transferRepository.findByTransferId("tf-$uniqueId")
         assertEquals(1, transfers.size)
         assertEquals(TransferStatus.FAILED, transfers[0].status)
         assertTrue(transfers[0].failureReason?.contains("Insufficient balance") ?: false)
@@ -123,9 +125,10 @@ class TransferIntegrationTest {
     
     @Test
     fun `should handle idempotent transfer requests`() {
-        // Given
+        // Given - use unique ID per test run
+        val uniqueId = java.util.UUID.randomUUID().toString()
         val event = TransferRequestedEvent(
-            transferId = "tf-integration-003",
+            transferId = "tf-$uniqueId",
             sourceAccountId = "acc-test-001",
             destinationAccountId = "acc-test-002",
             amount = BigDecimal("100.00"),
