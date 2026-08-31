@@ -1,100 +1,270 @@
-# Bank Transfer API - Scripts
+# Bank Transfer API - Setup & Running Locally
 
-All automation scripts organized by purpose.
+Step-by-step guide to setup and run the application locally.
 
-## Quick Start
+## Requirements
 
-### Option 1: Automated Setup (Recommended)
+- Docker & Docker Compose
+- Java 21
+- Python 3 (for serving dashboard)
+- Git
+
+## Quick Start (Recommended)
+
+### Terminal 1: Clean and Setup Infrastructure
 ```bash
-./scripts/full-setup.sh
-# Follow instructions in separate terminal
+# Clean everything (optional, only if previous setup failed)
+./scripts/stop-infra.sh
+docker system prune -af --volumes
+sudo rm -rf /tmp/localstack
+
+# Update code
+git pull origin develop
+
+# Start infrastructure automatically
+./full-setup.sh
+
+# Wait for: "✅ Infrastructure Ready!"
 ```
 
-### Option 2: Step-by-Step
-
-**Terminal 1 - Start Infrastructure:**
-```bash
-./scripts/start-infra.sh
-# Wait for "✅ Services ready!"
-```
-
-**Terminal 2 - Initialize Infrastructure:**
-```bash
-./scripts/init-infrastructure.sh
-# Creates Kafka topics, SQS queue, and sample data
-```
-
-**Terminal 1 - Start Application:**
+### Terminal 2: Start Application
 ```bash
 ./scripts/start-app.sh
+
+# Wait for: "DynamoDB tables initialized successfully!"
+```
+
+### Terminal 3: Generate Test Data (Optional)
+```bash
+# Generate 40+ test transfers to populate dashboard
+./scripts/DEMO2.sh
+
+# Or just 8 basic scenarios
+./scripts/DEMO.sh
+```
+
+### Terminal 4: View Dashboard
+```bash
+# Serve dashboard files
+python3 -m http.server 8888
+
+# Open in browser: http://localhost:8888/metrics-dashboard.html
+```
+
+## Manual Setup (Step-by-step)
+
+If you prefer to run each step manually:
+
+### Terminal 1: Start Infrastructure
+```bash
+./scripts/start-infra.sh
+
+# Wait for: "✅ Services ready!"
+# This starts Kafka and LocalStack (DynamoDB, SQS)
+```
+
+### Terminal 2: Initialize Infrastructure
+```bash
+./scripts/init-infrastructure.sh
+
+# This creates:
+# - Kafka topics (transfer-requested, transfer-completed)
+# - SQS queue (transfer-failed DLQ)
+# - Sample account data (acc-123, acc-456, acc-789, acc-000)
+```
+
+### Terminal 1: Start Application
+```bash
+./scripts/start-app.sh
+
+# Wait for: "DynamoDB tables initialized successfully!"
 ```
 
 ## Available Scripts
 
-### Infrastructure Scripts
-| Script | Purpose |
-|--------|---------|
-| `start-infra.sh` | Start Docker containers (Kafka + LocalStack) |
-| `stop-infra.sh` | Stop all Docker containers |
+### Infrastructure Lifecycle
+- `start-infra.sh` - Start Docker containers (Kafka + LocalStack)
+- `stop-infra.sh` - Stop all Docker containers
 
-### Initialization Scripts
-| Script | Purpose |
-|--------|---------|
-| `init-kafka.sh` | Create Kafka topics |
-| `init-sqs.sh` | Create SQS queue |
-| `init-dynamodb.sh` | Insert sample account data |
-| `init-infrastructure.sh` | Run all init scripts together |
+### Application Lifecycle
+- `start-app.sh` - Start Spring Boot application
+- `stop-app.sh` - Stop Spring Boot application
 
-### Application Scripts
-| Script | Purpose |
-|--------|---------|
-| `start-app.sh` | Start Spring Boot application |
-| `stop-app.sh` | Stop Spring Boot application |
+### Initialization
+- `init-infrastructure.sh` - Create topics, queue, and sample data
+- `init-kafka.sh` - Create Kafka topics only
+- `init-sqs.sh` - Create SQS queue only
+- `init-dynamodb.sh` - Insert sample account data only
 
-### Demo & Testing
-| Script | Purpose |
-|--------|---------|
-| `DEMO.sh` | Run basic demo tests with 8 scenarios |
-| `DEMO2.sh` | Run extended demo with 40+ test data points |
+### Testing & Demo
+- `DEMO.sh` - Run basic demo (8 test scenarios)
+- `DEMO2.sh` - Run extended demo (40+ test data points) ⭐ Best for presentations
 
 ### Automation
-| Script | Purpose |
-|--------|---------|
-| `full-setup.sh` | Automated setup (calls other scripts) |
+- `full-setup.sh` - Automated setup (calls infrastructure scripts)
 
-## Usage
+## Testing
 
-All scripts should be run from the project root:
+### Run Demo Tests
+
+**Basic demo:**
 ```bash
-./scripts/[script-name].sh
+./scripts/DEMO.sh
 ```
 
-NOT from inside the scripts folder.
-
-## Workflow
-
-**First Time Setup:**
+**Extended demo (recommended for presentations):**
 ```bash
-./scripts/full-setup.sh
-# Then in separate terminal:
-./scripts/start-app.sh
-# Then in another terminal:
-./scripts/init-dynamodb.sh
+./scripts/DEMO2.sh
 ```
 
-**Restart (Keep Data):**
-```bash
-# Just restart app (infra stays running):
-./scripts/start-app.sh
+### Manual API Tests
 
-# Stop everything:
+Success transfer:
+```bash
+curl -X POST http://localhost:8080/api/v1/transfers \
+  -H "Content-Type: application/json" \
+  -d '{
+    "transferId":"tf-test-001",
+    "sourceAccountId":"acc-123",
+    "destinationAccountId":"acc-456",
+    "amount":100.00,
+    "currency":"BRL",
+    "requestedAt":"2026-08-28T20:00:00Z"
+  }'
+```
+
+Failed transfer (account not found):
+```bash
+curl -X POST http://localhost:8080/api/v1/transfers \
+  -H "Content-Type: application/json" \
+  -d '{
+    "transferId":"tf-fail-001",
+    "sourceAccountId":"acc-999",
+    "destinationAccountId":"acc-456",
+    "amount":100.00,
+    "currency":"BRL",
+    "requestedAt":"2026-08-28T20:00:00Z"
+  }'
+```
+
+Check DLQ (failed transfers):
+```bash
+docker-compose exec localstack aws sqs receive-message \
+  --queue-url http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/transfer-failed \
+  --endpoint-url http://localhost:4566 \
+  --region us-east-1
+```
+
+## Metrics & Monitoring
+
+### Dashboard
+```bash
+# Serve dashboard
+python3 -m http.server 8888
+
+# Open: http://localhost:8888/metrics-dashboard.html
+```
+
+### API Endpoints
+```bash
+# All available metrics
+curl http://localhost:8080/actuator/metrics
+
+# Transfer processing time
+curl http://localhost:8080/actuator/metrics/transfer.processing.time
+
+# Successful transfers count
+curl http://localhost:8080/actuator/metrics/transfer.success.total
+
+# Failed transfers count
+curl http://localhost:8080/actuator/metrics/transfer.failure.total
+
+# Application health
+curl http://localhost:8080/actuator/health
+```
+
+## Stopping Services
+
+### Stop Application Only
+Keeps infrastructure running (can restart without losing data):
+```bash
+./scripts/stop-app.sh
+```
+
+### Stop All Infrastructure
+Stops all Docker containers:
+```bash
 ./scripts/stop-infra.sh
 ```
 
-**Clean Restart (Lose Data):**
+## Troubleshooting
+
+### LocalStack crashes with "Device or resource busy"
 ```bash
 ./scripts/stop-infra.sh
+docker system prune -af --volumes
+sudo rm -rf /tmp/localstack
 ./scripts/start-infra.sh
-./scripts/init-infrastructure.sh
+```
+
+### Spring Boot won't connect to Kafka
+- Wait 120 seconds after `start-infra.sh` - Kafka needs time to stabilize
+- Check Kafka is healthy: logs should show KRaft mode active
+
+### No data in dashboard
+- Run `./scripts/DEMO2.sh` to generate test data
+- Wait 2 seconds for Kafka to process messages
+- Refresh dashboard (F5)
+
+### Port already in use
+```bash
+# Find what's using the port
+lsof -i :8080
+lsof -i :9092
+lsof -i :4566
+
+# Kill if needed
+kill -9 <PID>
+```
+
+## Development Workflow
+
+### Restart app (keep data):
+```bash
+./scripts/stop-app.sh
 ./scripts/start-app.sh
 ```
+
+### Full clean restart (lose data):
+```bash
+./scripts/stop-infra.sh
+docker system prune -af --volumes
+sudo rm -rf /tmp/localstack
+./full-setup.sh
+./scripts/start-app.sh
+```
+
+### Add more test data:
+```bash
+./scripts/DEMO2.sh
+```
+
+## Database Schema
+
+### DynamoDB Tables
+- **accounts** - Account data (accountId, balance, status, etc)
+- **transactions** - Transfer records (transferId, status, result)
+
+### Kafka Topics
+- **transfer-requested** - Incoming transfer events
+- **transfer-completed** - Successful transfer events
+
+### SQS Queues
+- **transfer-failed** - Dead Letter Queue for failed transfers
+
+## Next Steps
+
+For detailed project information, see:
+- [../README.md](../README.md) - Project overview and features
+- [../docs/CODE_REVIEW_LEGACY.md](../docs/CODE_REVIEW_LEGACY.md) - Code review insights
+- [../docs/ERROR_HANDLING.md](../docs/ERROR_HANDLING.md) - Error handling strategy
