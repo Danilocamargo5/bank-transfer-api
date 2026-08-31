@@ -4,27 +4,79 @@ Microserviço de processamento de transferências bancárias internas com Kafka,
 
 ## Quick Start
 
+### Automated Setup (Recommended)
+
+```bash
+# Terminal 1: Clean and setup everything
+./scripts/stop-infra.sh  # Stop if running
+docker system prune -af --volumes
+sudo rm -rf /tmp/localstack
+
+git pull origin develop
+
+# Start everything automatically
+./scripts/full-setup.sh
+# Wait for "✅ Infrastructure Ready!" message
+```
+
+**Then in another terminal:**
+
+```bash
+# Terminal 2: Start the application
+./scripts/start-app.sh
+# Wait for "DynamoDB tables initialized successfully!"
+```
+
+**Optional - Generate test data for dashboard:**
+
+```bash
+# Terminal 3: Run extended demo
+./scripts/DEMO2.sh
+```
+
+**View metrics dashboard:**
+
+```bash
+# Terminal 4: Serve dashboard
+python3 -m http.server 8888
+
+# Browser: http://localhost:8888/metrics-dashboard.html
+```
+
+### Manual Setup (Step-by-step)
+
 ```bash
 # Terminal 1: Start infrastructure
 ./scripts/start-infra.sh
+# Wait for "✅ Services ready!"
 
-# Terminal 2: Initialize infrastructure
+# Terminal 2: Initialize (topics, queue, data)
 ./scripts/init-infrastructure.sh
 
 # Terminal 1: Start application
 ./scripts/start-app.sh
-```
-
-Or use automated setup:
-```bash
-./scripts/full-setup.sh
+# Wait for "DynamoDB tables initialized successfully!"
 ```
 
 See [scripts/README.md](scripts/README.md) for detailed script documentation.
 
-## Testing
+## Testing & Demo
 
-### Success Transfer
+### Run Automated Tests
+
+**Basic Demo (8 scenarios):**
+```bash
+./scripts/DEMO.sh
+```
+
+**Extended Demo (40+ test data points - Best for presentations!):**
+```bash
+./scripts/DEMO2.sh
+```
+
+### Manual Test
+
+Success transfer:
 ```bash
 curl -X POST http://localhost:8080/api/v1/transfers \
   -H "Content-Type: application/json" \
@@ -78,7 +130,45 @@ curl http://localhost:8080/actuator/metrics/transfer.failure.total
 curl http://localhost:8080/actuator/health
 ```
 
-## Architecture
+## Metrics & Dashboard
+
+### View Real-time Metrics
+
+**Dashboard (Beautiful visualization):**
+```bash
+# Serve dashboard
+python3 -m http.server 8888
+
+# Open browser: http://localhost:8888/metrics-dashboard.html
+```
+
+**API Endpoints:**
+```bash
+# All metrics
+curl http://localhost:8080/actuator/metrics
+
+# Transfer processing time
+curl http://localhost:8080/actuator/metrics/transfer.processing.time
+
+# Success count
+curl http://localhost:8080/actuator/metrics/transfer.success.total
+
+# Failure count
+curl http://localhost:8080/actuator/metrics/transfer.failure.total
+
+# Application health
+curl http://localhost:8080/actuator/health
+```
+
+## Stopping Services
+
+```bash
+# Stop application only (keep infrastructure)
+./scripts/stop-app.sh
+
+# Stop all infrastructure
+./scripts/stop-infra.sh
+```
 
 ```
 POST /api/v1/transfers
