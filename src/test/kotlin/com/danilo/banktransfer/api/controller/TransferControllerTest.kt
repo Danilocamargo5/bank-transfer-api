@@ -1,7 +1,6 @@
 package com.danilo.banktransfer.api.controller
 
 import com.danilo.banktransfer.domain.dto.TransferRequestDTO
-import com.danilo.banktransfer.domain.enums.Currency
 import com.danilo.banktransfer.infrastructure.repository.TransferRepository
 import com.danilo.banktransfer.infrastructure.metrics.TransferMetrics
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -31,7 +30,7 @@ class TransferControllerTest {
         sourceAccountId = "acc-001",
         destinationAccountId = "acc-002",
         amount = BigDecimal("100.00"),
-        currency = Currency.BRL,
+        currency = "BRL",
         requestedAt = Instant.now()
     )
     

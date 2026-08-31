@@ -2,7 +2,6 @@ package com.danilo.banktransfer.api.controller
 
 import com.danilo.banktransfer.domain.model.Account
 import com.danilo.banktransfer.domain.enums.AccountStatus
-import com.danilo.banktransfer.domain.enums.Currency
 import com.danilo.banktransfer.infrastructure.repository.AccountRepository
 import io.mockk.every
 import io.mockk.mockk
@@ -23,7 +22,7 @@ class AccountControllerTest {
     private val testAccount = Account(
         accountId = "acc-001",
         balance = BigDecimal("5000.00"),
-        currency = Currency.BRL,
+        currency = "BRL",
         status = AccountStatus.ACTIVE,
         customerName = "Test User",
         createdAt = Instant.now()

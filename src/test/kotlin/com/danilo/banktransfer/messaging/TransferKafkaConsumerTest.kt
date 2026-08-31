@@ -1,7 +1,6 @@
 package com.danilo.banktransfer.messaging
 
 import com.danilo.banktransfer.application.TransferService
-import com.danilo.banktransfer.domain.enums.Currency
 import com.danilo.banktransfer.domain.model.TransferRequestedEvent
 import com.danilo.banktransfer.domain.model.TransferCompletedEvent
 import com.danilo.banktransfer.domain.model.TransferFailedEvent
@@ -51,7 +50,7 @@ class TransferKafkaConsumerTest {
             sourceAccountId = "acc-001",
             destinationAccountId = "acc-002",
             amount = BigDecimal("100.00"),
-            currency = Currency.BRL,
+            currency = "BRL",
             completedAt = Instant.now()
         )
         
@@ -73,7 +72,7 @@ class TransferKafkaConsumerTest {
             sourceAccountId = "acc-001",
             destinationAccountId = "acc-002",
             amount = BigDecimal("100.00"),
-            currency = Currency.BRL,
+            currency = "BRL",
             failureReason = "Account not found",
             failedAt = Instant.now()
         )

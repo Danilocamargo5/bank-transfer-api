@@ -53,6 +53,7 @@ dependencies {
 	testImplementation("io.kotest:kotest-runner-junit5:5.8.0")
 	testImplementation("io.kotest:kotest-assertions-core:5.8.0")
 	testImplementation("org.hamcrest:hamcrest:2.2")
+	testImplementation("org.jetbrains.kotlin:kotlin-test:2.0.0")
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
