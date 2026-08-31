@@ -8,7 +8,6 @@ import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.runs
-import io.mockk.justRuns
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.BeforeEach
 import org.springframework.http.HttpStatus
@@ -53,7 +52,7 @@ class TransferControllerTest {
     fun `should accept valid transfer request`() {
         // Given
         every { kafkaTemplate.send(any(), any(), any()) } returns mockk()
-        every { transferMetrics.recordKafkaPublish(any(), any()) } justRuns
+        every { transferMetrics.recordKafkaPublish(any(), any()) } just runs
         
         // When
         val response = transferController.createTransfer(validRequest)
@@ -68,7 +67,7 @@ class TransferControllerTest {
     fun `should reject empty transferId`() {
         // Given
         val invalid = validRequest.copy(transferId = "")
-        every { transferMetrics.recordKafkaPublish(any(), any()) } justRuns
+        every { transferMetrics.recordKafkaPublish(any(), any()) } just runs
         
         // When
         val response = transferController.createTransfer(invalid)
@@ -83,7 +82,7 @@ class TransferControllerTest {
     fun `should reject zero amount`() {
         // Given
         val invalid = validRequest.copy(amount = BigDecimal.ZERO)
-        every { transferMetrics.recordKafkaPublish(any(), any()) } justRuns
+        every { transferMetrics.recordKafkaPublish(any(), any()) } just runs
         
         // When
         val response = transferController.createTransfer(invalid)
@@ -101,7 +100,7 @@ class TransferControllerTest {
             sourceAccountId = "acc-001",
             destinationAccountId = "acc-001"
         )
-        every { transferMetrics.recordKafkaPublish(any(), any()) } justRuns
+        every { transferMetrics.recordKafkaPublish(any(), any()) } just runs
         
         // When
         val response = transferController.createTransfer(invalid)
@@ -116,7 +115,7 @@ class TransferControllerTest {
     fun `should handle kafka publishing error`() {
         // Given
         every { kafkaTemplate.send(any(), any(), any()) } throws RuntimeException("Kafka error")
-        every { transferMetrics.recordKafkaPublish(any(), any()) } justRuns
+        every { transferMetrics.recordKafkaPublish(any(), any()) } just runs
         
         // When
         val response = transferController.createTransfer(validRequest)

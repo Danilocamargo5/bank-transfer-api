@@ -9,7 +9,6 @@ import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.runs
-import io.mockk.justRuns
 import io.mockk.verify
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.BeforeEach
@@ -79,7 +78,7 @@ class TransferKafkaConsumerTest {
         )
         
         every { transferService.processTransfer(any()) } returns TransferService.Result.Failure(failureEvent)
-        every { sqsPublisher.publishTransferFailed(any()) } justRuns
+        every { sqsPublisher.publishTransferFailed(any()) } just runs
         
         // When
         consumer.consumeTransferRequest(validMessage)
@@ -92,7 +91,7 @@ class TransferKafkaConsumerTest {
     fun `should handle malformed message gracefully`() {
         // Given
         val malformedMessage = "{invalid json"
-        every { sqsPublisher.publishTransferFailed(any()) } justRuns
+        every { sqsPublisher.publishTransferFailed(any()) } just runs
         
         // When & Then
         try {

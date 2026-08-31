@@ -16,7 +16,6 @@ import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.runs
-import io.mockk.justRuns
 import io.mockk.verify
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -75,10 +74,10 @@ class TransferServiceTest {
         every { transferRepository.hasCompletedTransfer("tf-001") } returns false
         every { accountRepository.findById("acc-001") } returns Optional.of(sourceAccount)
         every { accountRepository.findById("acc-002") } returns Optional.of(destinationAccount)
-        every { accountRepository.save(any()) } justRuns
-        every { transferRepository.save(any()) } justRuns
-        every { transferMetrics.recordTransferProcessingTime(any()) } justRuns
-        every { transferMetrics.recordTransferSuccess() } justRuns
+        every { accountRepository.save(any()) } just runs
+        every { transferRepository.save(any()) } just runs
+        every { transferMetrics.recordTransferProcessingTime(any()) } just runs
+        every { transferMetrics.recordTransferSuccess() } just runs
         
         // When
         val result = transferService.processTransfer(transferEvent)
@@ -92,8 +91,8 @@ class TransferServiceTest {
     fun `should reject duplicate transfer`() {
         // Given
         every { transferRepository.hasCompletedTransfer("tf-001") } returns true
-        every { transferMetrics.recordTransferProcessingTime(any()) } justRuns
-        every { transferMetrics.recordTransferFailure(any()) } justRuns
+        every { transferMetrics.recordTransferProcessingTime(any()) } just runs
+        every { transferMetrics.recordTransferFailure(any()) } just runs
         
         // When & Then
         assertThrows<DuplicateTransferException> {
@@ -106,9 +105,9 @@ class TransferServiceTest {
         // Given
         every { transferRepository.hasCompletedTransfer("tf-001") } returns false
         every { accountRepository.findById("acc-001") } returns Optional.empty()
-        every { transferRepository.save(any()) } justRuns
-        every { transferMetrics.recordTransferProcessingTime(any()) } justRuns
-        every { transferMetrics.recordTransferFailure(any()) } justRuns
+        every { transferRepository.save(any()) } just runs
+        every { transferMetrics.recordTransferProcessingTime(any()) } just runs
+        every { transferMetrics.recordTransferFailure(any()) } just runs
         
         // When & Then
         assertThrows<AccountNotFoundException> {
@@ -123,9 +122,9 @@ class TransferServiceTest {
         every { transferRepository.hasCompletedTransfer("tf-001") } returns false
         every { accountRepository.findById("acc-001") } returns Optional.of(poorAccount)
         every { accountRepository.findById("acc-002") } returns Optional.of(destinationAccount)
-        every { transferRepository.save(any()) } justRuns
-        every { transferMetrics.recordTransferProcessingTime(any()) } justRuns
-        every { transferMetrics.recordTransferFailure(any()) } justRuns
+        every { transferRepository.save(any()) } just runs
+        every { transferMetrics.recordTransferProcessingTime(any()) } just runs
+        every { transferMetrics.recordTransferFailure(any()) } just runs
         
         // When & Then
         assertThrows<InsufficientBalanceException> {
@@ -140,9 +139,9 @@ class TransferServiceTest {
         every { transferRepository.hasCompletedTransfer("tf-001") } returns false
         every { accountRepository.findById("acc-001") } returns Optional.of(inactiveAccount)
         every { accountRepository.findById("acc-002") } returns Optional.of(destinationAccount)
-        every { transferRepository.save(any()) } justRuns
-        every { transferMetrics.recordTransferProcessingTime(any()) } justRuns
-        every { transferMetrics.recordTransferFailure(any()) } justRuns
+        every { transferRepository.save(any()) } just runs
+        every { transferMetrics.recordTransferProcessingTime(any()) } just runs
+        every { transferMetrics.recordTransferFailure(any()) } just runs
         
         // When & Then
         assertThrows<InactiveAccountException> {
