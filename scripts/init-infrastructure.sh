@@ -2,23 +2,25 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
 echo "📋 Initializing infrastructure..."
 echo ""
 
 echo "1️⃣ Creating Kafka topics..."
-./init-kafka.sh
+"$SCRIPT_DIR/init-kafka.sh"
 
 echo ""
 echo "2️⃣ Creating SQS queue..."
-./init-sqs.sh
+"$SCRIPT_DIR/init-sqs.sh"
 
 echo ""
 echo "3️⃣ Inserting sample data..."
-./init-dynamodb.sh
+"$SCRIPT_DIR/init-dynamodb.sh"
 
 echo ""
 echo "=========================================="
 echo "✅ Infrastructure initialized!"
 echo "=========================================="
 echo ""
-echo "Ready to start: ./start.sh"
+echo "Ready to start: ./scripts/start.sh"

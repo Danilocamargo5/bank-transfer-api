@@ -6,17 +6,24 @@ Microserviço de processamento de transferências bancárias internas com Kafka,
 
 ```bash
 # Terminal 1: Start infrastructure
-./services.sh
+./scripts/services.sh
 
 # Terminal 2: Initialize Kafka, SQS, DynamoDB
-./init-infrastructure.sh
+./scripts/init-infrastructure.sh
 
 # Terminal 1: Start application
-./start.sh
+./scripts/start.sh
 
 # Terminal 2: Insert sample data (after app is ready)
-./init-dynamodb.sh
+./scripts/init-dynamodb.sh
 ```
+
+Or use automated setup:
+```bash
+./scripts/full-setup.sh
+```
+
+See [scripts/README.md](scripts/README.md) for detailed script documentation.
 
 ## Testing
 
@@ -118,13 +125,18 @@ Failure → SQS: transfer-failed (DLQ)
 
 ## Scripts
 
+All automation scripts are in the `scripts/` folder:
+
 | Script | Purpose |
 |--------|---------|
-| `services.sh` | Start Docker (Kafka + LocalStack) |
-| `init-infrastructure.sh` | Create topics, queue, data |
-| `start.sh` | Start Spring Boot app |
-| `stop.sh` | Stop all containers |
-| `full-setup.sh` | Automated setup |
+| `scripts/services.sh` | Start Docker (Kafka + LocalStack) |
+| `scripts/init-infrastructure.sh` | Create topics, queue, data |
+| `scripts/start.sh` | Start Spring Boot app |
+| `scripts/stop.sh` | Stop all containers |
+| `scripts/full-setup.sh` | Automated setup |
+| `scripts/DEMO.sh` | Run all demo tests with metrics |
+
+See [scripts/README.md](scripts/README.md) for details.
 
 ## Status
 
