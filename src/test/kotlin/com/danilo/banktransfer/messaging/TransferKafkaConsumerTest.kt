@@ -1,6 +1,7 @@
 package com.danilo.banktransfer.messaging
 
 import com.danilo.banktransfer.application.TransferService
+import com.danilo.banktransfer.domain.enums.Currency
 import com.danilo.banktransfer.domain.model.TransferRequestedEvent
 import com.danilo.banktransfer.domain.model.TransferCompletedEvent
 import com.danilo.banktransfer.domain.model.TransferFailedEvent
@@ -30,7 +31,7 @@ class TransferKafkaConsumerTest {
         "destinationAccountId":"acc-002",
         "amount":100.00,
         "currency":"BRL",
-        "requestedAt":"2026-08-28T20:00:00Z"
+        "requestedAt":"2026-08-31T20:00:00Z"
     }"""
     
     @BeforeEach
@@ -50,7 +51,7 @@ class TransferKafkaConsumerTest {
             sourceAccountId = "acc-001",
             destinationAccountId = "acc-002",
             amount = BigDecimal("100.00"),
-            currency = "BRL",
+            currency = Currency.BRL,
             completedAt = Instant.now()
         )
         
@@ -58,7 +59,7 @@ class TransferKafkaConsumerTest {
         every { kafkaTemplate.send(any(), any(), any()) } returns mockk()
         
         // When
-        consumer.handle(validMessage)
+        consumer.consumeTransferRequest(validMessage)
         
         // Then
         verify { kafkaTemplate.send("transfer-completed", any(), any()) }
@@ -72,30 +73,30 @@ class TransferKafkaConsumerTest {
             sourceAccountId = "acc-001",
             destinationAccountId = "acc-002",
             amount = BigDecimal("100.00"),
-            currency = "BRL",
+            currency = Currency.BRL,
             failureReason = "Account not found",
             failedAt = Instant.now()
         )
         
         every { transferService.processTransfer(any()) } returns TransferService.Result.Failure(failureEvent)
-        every { sqsPublisher.publishFailure(any()) } just runs
+        every { sqsPublisher.publishTransferFailed(any()) } just runs
         
         // When
-        consumer.handle(validMessage)
+        consumer.consumeTransferRequest(validMessage)
         
         // Then
-        verify { sqsPublisher.publishFailure(any()) }
+        verify { sqsPublisher.publishTransferFailed(any()) }
     }
     
     @Test
     fun `should handle malformed message gracefully`() {
         // Given
         val malformedMessage = "{invalid json"
-        every { sqsPublisher.publishFailure(any()) } just runs
+        every { sqsPublisher.publishTransferFailed(any()) } just runs
         
         // When & Then
         try {
-            consumer.handle(malformedMessage)
+            consumer.consumeTransferRequest(malformedMessage)
         } catch (e: Exception) {
             // Expected
         }

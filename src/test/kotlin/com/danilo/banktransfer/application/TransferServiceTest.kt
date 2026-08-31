@@ -7,6 +7,7 @@ import com.danilo.banktransfer.application.exception.InsufficientBalanceExceptio
 import com.danilo.banktransfer.domain.model.Account
 import com.danilo.banktransfer.domain.model.TransferRequestedEvent
 import com.danilo.banktransfer.domain.enums.AccountStatus
+import com.danilo.banktransfer.domain.enums.Currency
 import com.danilo.banktransfer.domain.enums.TransferStatus
 import com.danilo.banktransfer.infrastructure.repository.AccountRepository
 import com.danilo.banktransfer.infrastructure.repository.TransferRepository
@@ -35,7 +36,7 @@ class TransferServiceTest {
     private val sourceAccount = Account(
         accountId = "acc-001",
         balance = BigDecimal("5000.00"),
-        currency = "BRL",
+        currency = Currency.BRL,
         status = AccountStatus.ACTIVE,
         customerName = "João Silva",
         createdAt = Instant.now()
@@ -44,7 +45,7 @@ class TransferServiceTest {
     private val destinationAccount = Account(
         accountId = "acc-002",
         balance = BigDecimal("1000.00"),
-        currency = "BRL",
+        currency = Currency.BRL,
         status = AccountStatus.ACTIVE,
         customerName = "Maria Santos",
         createdAt = Instant.now()
@@ -55,7 +56,7 @@ class TransferServiceTest {
         sourceAccountId = "acc-001",
         destinationAccountId = "acc-002",
         amount = BigDecimal("100.00"),
-        currency = "BRL",
+        currency = Currency.BRL,
         requestedAt = Instant.now()
     )
     
