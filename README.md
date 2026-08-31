@@ -61,7 +61,10 @@ TransferKafkaConsumer
 ./full-setup.sh
 ./scripts/start-app.sh
 ./scripts/DEMO2.sh
-# Open: http://localhost:8080/metrics-dashboard.html
+
+# Dashboard available at:
+# - Local: http://localhost:8080/metrics-dashboard.html
+# - Codespaces: https://[your-codespace].app.github.dev/metrics-dashboard.html
 ```
 
 For detailed setup instructions, see [Setup Guide](./SETUP.md) or [Scripts Documentation](./scripts/README.md)
@@ -70,8 +73,11 @@ For detailed setup instructions, see [Setup Guide](./SETUP.md) or [Scripts Docum
 
 Real-time dashboard available at:
 ```
-http://localhost:8080/metrics-dashboard.html
+Local: http://localhost:8080/metrics-dashboard.html
+Codespaces: https://[your-codespace].app.github.dev/metrics-dashboard.html
 ```
+
+The dashboard automatically detects the environment and uses the correct URLs.
 
 Metrics:
 - Transfer processing time

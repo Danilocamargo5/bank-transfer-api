@@ -50,8 +50,14 @@ git pull origin develop
 
 ### Terminal 4: View Dashboard
 ```bash
-# Dashboard is automatically served by Spring Boot
+# Dashboard is automatically served by Spring Boot on port 8080
+
+# Local development:
 # Open in browser: http://localhost:8080/metrics-dashboard.html
+
+# GitHub Codespaces:
+# Open in browser: https://[your-codespace].app.github.dev/metrics-dashboard.html
+# (Automatically detects and uses correct port)
 ```
 
 ## Manual Setup (Step-by-step)
