@@ -22,8 +22,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.assertFalse
 
+import org.springframework.transaction.annotation.Transactional
+
 @SpringBootTest
 @ActiveProfiles("test")
+@Transactional
 class TransferIntegrationTest {
     
     @Autowired
@@ -37,6 +40,10 @@ class TransferIntegrationTest {
     
     @BeforeEach
     fun setup() {
+        // Clean up previous test data
+        transferRepository.deleteAll()
+        accountRepository.deleteAll()
+        
         val sourceAccount = Account(
             accountId = "acc-test-001",
             balance = BigDecimal("5000.00"),
