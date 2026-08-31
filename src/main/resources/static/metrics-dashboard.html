@@ -370,15 +370,25 @@
         }
 
         function updateCharts(successCount, failureCount) {
-            const ctx1 = document.getElementById('successFailureChart');
-            const ctx2 = document.getElementById('timingChart');
+            try {
+                const ctx1 = document.getElementById('successFailureChart');
+                const ctx2 = document.getElementById('timingChart');
 
-            // Success/Failure Chart
-            if (successFailureChart) {
-                successFailureChart.data.datasets[0].data = [successCount, failureCount];
-                successFailureChart.update();
-            } else {
-                successFailureChart = new Chart(ctx1, {
+                if (!ctx1 || !ctx2) {
+                    console.warn('Canvas elements not found');
+                    return;
+                }
+
+                // Destroy existing charts if they exist
+                if (window.successFailureChart && window.successFailureChart.destroy) {
+                    window.successFailureChart.destroy();
+                }
+                if (window.timingChart && window.timingChart.destroy) {
+                    window.timingChart.destroy();
+                }
+
+                // Success/Failure Chart
+                window.successFailureChart = new Chart(ctx1, {
                     type: 'doughnut',
                     data: {
                         labels: ['Sucesso', 'Falha'],
@@ -391,7 +401,6 @@
                     },
                     options: {
                         responsive: true,
-                        maintainAspectRatio: true,
                         plugins: {
                             legend: {
                                 position: 'bottom'
@@ -399,45 +408,32 @@
                         }
                     }
                 });
-            }
 
-            // Timing Chart
-            if (timingChart) {
-                timingChart.data.labels = Array.from({length: timingDataArray.length}, (_, i) => i + 1);
-                timingChart.data.datasets[0].data = timingDataArray;
-                timingChart.update();
-            } else {
-                timingChart = new Chart(ctx2, {
+                // Timing Chart
+                window.timingChart = new Chart(ctx2, {
                     type: 'line',
                     data: {
-                        labels: Array.from({length: timingDataArray.length}, (_, i) => i + 1),
+                        labels: Array.from({length: timingDataArray.length || 1}, (_, i) => i + 1),
                         datasets: [{
                             label: 'Tempo (ms)',
-                            data: timingDataArray,
+                            data: timingDataArray.length > 0 ? timingDataArray : [0],
                             borderColor: '#f59e0b',
                             backgroundColor: 'rgba(245, 158, 11, 0.1)',
                             tension: 0.4,
-                            fill: true,
-                            pointRadius: 4,
-                            pointBackgroundColor: '#f59e0b'
+                            fill: true
                         }]
                     },
                     options: {
                         responsive: true,
-                        maintainAspectRatio: true,
                         scales: {
                             y: {
-                                beginAtZero: true,
-                                min: 0
-                            }
-                        },
-                        plugins: {
-                            legend: {
-                                display: true
+                                beginAtZero: true
                             }
                         }
                     }
                 });
+            } catch (error) {
+                console.error('Chart rendering error:', error);
             }
         }
 
