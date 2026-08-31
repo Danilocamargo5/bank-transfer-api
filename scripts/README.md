@@ -54,7 +54,8 @@ All automation scripts organized by purpose.
 ### Demo & Testing
 | Script | Purpose |
 |--------|---------|
-| `DEMO.sh` | Run all demo tests with metrics |
+| `DEMO.sh` | Run basic demo tests with 8 scenarios |
+| `DEMO2.sh` | Run extended demo with 40+ test data points |
 
 ### Automation
 | Script | Purpose |

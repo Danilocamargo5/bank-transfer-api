@@ -137,7 +137,8 @@ All automation scripts organized by purpose in the `scripts/` folder:
 - `scripts/init-kafka.sh`, `init-sqs.sh`, `init-dynamodb.sh` - Individual init scripts
 
 **Testing:**
-- `scripts/DEMO.sh` - Run all demo tests with metrics
+- `scripts/DEMO.sh` - Basic demo (8 test scenarios)
+- `scripts/DEMO2.sh` - Extended demo (40+ test data points) - **Best for presentations!**
 
 **Automation:**
 - `scripts/full-setup.sh` - Automated setup
