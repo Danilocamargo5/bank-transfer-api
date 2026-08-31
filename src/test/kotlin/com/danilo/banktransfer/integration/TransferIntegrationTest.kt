@@ -3,6 +3,7 @@ package com.danilo.banktransfer.integration
 import com.danilo.banktransfer.domain.dto.TransferRequestDTO
 import com.danilo.banktransfer.domain.model.Account
 import com.danilo.banktransfer.domain.enums.AccountStatus
+import com.danilo.banktransfer.domain.enums.Currency
 import com.danilo.banktransfer.domain.enums.TransferStatus
 import com.danilo.banktransfer.infrastructure.repository.AccountRepository
 import com.danilo.banktransfer.infrastructure.repository.TransferRepository
@@ -39,7 +40,7 @@ class TransferIntegrationTest {
         val sourceAccount = Account(
             accountId = "acc-test-001",
             balance = BigDecimal("5000.00"),
-            currency = "BRL",
+            currency = Currency.BRL,
             status = AccountStatus.ACTIVE,
             customerName = "Test Source",
             createdAt = Instant.now()
@@ -48,7 +49,7 @@ class TransferIntegrationTest {
         val destAccount = Account(
             accountId = "acc-test-002",
             balance = BigDecimal("1000.00"),
-            currency = "BRL",
+            currency = Currency.BRL,
             status = AccountStatus.ACTIVE,
             customerName = "Test Dest",
             createdAt = Instant.now()

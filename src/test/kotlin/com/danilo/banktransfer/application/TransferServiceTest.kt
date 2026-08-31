@@ -7,6 +7,7 @@ import com.danilo.banktransfer.application.exception.InsufficientBalanceExceptio
 import com.danilo.banktransfer.domain.model.Account
 import com.danilo.banktransfer.domain.model.TransferRequestedEvent
 import com.danilo.banktransfer.domain.enums.AccountStatus
+import com.danilo.banktransfer.domain.enums.Currency
 import com.danilo.banktransfer.domain.enums.TransferStatus
 import com.danilo.banktransfer.infrastructure.repository.AccountRepository
 import com.danilo.banktransfer.infrastructure.repository.TransferRepository
@@ -35,7 +36,7 @@ class TransferServiceTest {
     private val sourceAccount = Account(
         accountId = "acc-001",
         balance = BigDecimal("5000.00"),
-        currency = "BRL",
+        currency = Currency.BRL,
         status = AccountStatus.ACTIVE,
         customerName = "João Silva",
         createdAt = Instant.now()
@@ -44,7 +45,7 @@ class TransferServiceTest {
     private val destinationAccount = Account(
         accountId = "acc-002",
         balance = BigDecimal("1000.00"),
-        currency = "BRL",
+        currency = Currency.BRL,
         status = AccountStatus.ACTIVE,
         customerName = "Maria Santos",
         createdAt = Instant.now()
@@ -73,10 +74,10 @@ class TransferServiceTest {
         every { transferRepository.hasCompletedTransfer("tf-001") } returns false
         every { accountRepository.findById("acc-001") } returns Optional.of(sourceAccount)
         every { accountRepository.findById("acc-002") } returns Optional.of(destinationAccount)
-        every { accountRepository.save(any()) } just runs
-        every { transferRepository.save(any()) } just runs
-        every { transferMetrics.recordTransferProcessingTime(any()) } just runs
-        every { transferMetrics.recordTransferSuccess() } just runs
+        every { accountRepository.save(any()) } answers { }
+        every { transferRepository.save(any()) } answers { }
+        every { transferMetrics.recordTransferProcessingTime(any()) } answers { }
+        every { transferMetrics.recordTransferSuccess() } answers { }
         
         // When
         val result = transferService.processTransfer(transferEvent)
@@ -90,8 +91,8 @@ class TransferServiceTest {
     fun `should reject duplicate transfer`() {
         // Given
         every { transferRepository.hasCompletedTransfer("tf-001") } returns true
-        every { transferMetrics.recordTransferProcessingTime(any()) } just runs
-        every { transferMetrics.recordTransferFailure(any()) } just runs
+        every { transferMetrics.recordTransferProcessingTime(any()) } answers { }
+        every { transferMetrics.recordTransferFailure(any()) } answers { }
         
         // When & Then
         assertThrows<DuplicateTransferException> {
@@ -104,9 +105,9 @@ class TransferServiceTest {
         // Given
         every { transferRepository.hasCompletedTransfer("tf-001") } returns false
         every { accountRepository.findById("acc-001") } returns Optional.empty()
-        every { transferRepository.save(any()) } just runs
-        every { transferMetrics.recordTransferProcessingTime(any()) } just runs
-        every { transferMetrics.recordTransferFailure(any()) } just runs
+        every { transferRepository.save(any()) } answers { }
+        every { transferMetrics.recordTransferProcessingTime(any()) } answers { }
+        every { transferMetrics.recordTransferFailure(any()) } answers { }
         
         // When & Then
         assertThrows<AccountNotFoundException> {
@@ -121,9 +122,9 @@ class TransferServiceTest {
         every { transferRepository.hasCompletedTransfer("tf-001") } returns false
         every { accountRepository.findById("acc-001") } returns Optional.of(poorAccount)
         every { accountRepository.findById("acc-002") } returns Optional.of(destinationAccount)
-        every { transferRepository.save(any()) } just runs
-        every { transferMetrics.recordTransferProcessingTime(any()) } just runs
-        every { transferMetrics.recordTransferFailure(any()) } just runs
+        every { transferRepository.save(any()) } answers { }
+        every { transferMetrics.recordTransferProcessingTime(any()) } answers { }
+        every { transferMetrics.recordTransferFailure(any()) } answers { }
         
         // When & Then
         assertThrows<InsufficientBalanceException> {
@@ -138,9 +139,9 @@ class TransferServiceTest {
         every { transferRepository.hasCompletedTransfer("tf-001") } returns false
         every { accountRepository.findById("acc-001") } returns Optional.of(inactiveAccount)
         every { accountRepository.findById("acc-002") } returns Optional.of(destinationAccount)
-        every { transferRepository.save(any()) } just runs
-        every { transferMetrics.recordTransferProcessingTime(any()) } just runs
-        every { transferMetrics.recordTransferFailure(any()) } just runs
+        every { transferRepository.save(any()) } answers { }
+        every { transferMetrics.recordTransferProcessingTime(any()) } answers { }
+        every { transferMetrics.recordTransferFailure(any()) } answers { }
         
         // When & Then
         assertThrows<InactiveAccountException> {
