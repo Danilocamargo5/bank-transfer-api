@@ -87,8 +87,8 @@ class TransferIntegrationTest {
         // Verify account balances were updated
         val sourceAccount = accountRepository.findById("acc-test-001").get()
         val destAccount = accountRepository.findById("acc-test-002").get()
-        assertEquals(BigDecimal("4900.00"), sourceAccount.balance)
-        assertEquals(BigDecimal("1100.00"), destAccount.balance)
+        assertTrue(sourceAccount.balance.compareTo(BigDecimal("4900.00")) == 0, "sourceAccount.balance should equal 4900.00")
+        assertTrue(destAccount.balance.compareTo(BigDecimal("1100.00")) == 0, "destAccount.balance should equal 1100.00")
     }
     
     @Test
@@ -119,8 +119,8 @@ class TransferIntegrationTest {
         // Verify account balances were NOT changed
         val sourceAccount = accountRepository.findById("acc-test-001").get()
         val destAccount = accountRepository.findById("acc-test-002").get()
-        assertEquals(BigDecimal("5000.00"), sourceAccount.balance)
-        assertEquals(BigDecimal("1000.00"), destAccount.balance)
+        assertTrue(sourceAccount.balance.compareTo(BigDecimal("5000.00")) == 0, "sourceAccount.balance should equal 5000.00")
+        assertTrue(destAccount.balance.compareTo(BigDecimal("1000.00")) == 0, "destAccount.balance should equal 1000.00")
     }
     
     @Test
@@ -142,7 +142,7 @@ class TransferIntegrationTest {
         
         // Verify balances after first transfer
         var sourceAccount = accountRepository.findById("acc-test-001").get()
-        assertEquals(BigDecimal("4900.00"), sourceAccount.balance)
+        assertTrue(sourceAccount.balance.compareTo(BigDecimal("4900.00")) == 0, "sourceAccount.balance should equal 4900.00")
         
         // When - retry with same transferId
         val result2 = transferService.processTransfer(event)
@@ -150,6 +150,6 @@ class TransferIntegrationTest {
         
         // Then - verify balance didn't change
         sourceAccount = accountRepository.findById("acc-test-001").get()
-        assertEquals(BigDecimal("4900.00"), sourceAccount.balance) // Should remain same
+        assertTrue(sourceAccount.balance.compareTo(BigDecimal("4900.00")) == 0, "sourceAccount.balance should equal 4900.00") // Should remain same
     }
 }
