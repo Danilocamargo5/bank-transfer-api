@@ -191,19 +191,17 @@
             opacity: 0.8;
         }
 
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: white;
-            font-size: 1.2em;
-        }
-
         .error-message {
             background: #fee2e2;
             color: #dc2626;
             padding: 15px;
             border-radius: 10px;
             margin: 20px 0;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
         }
 
         @keyframes pulse {
@@ -227,7 +225,7 @@
             <p class="subtitle">Real-time Metrics Dashboard</p>
         </header>
 
-        <div id="error-container"></div>
+        <div id="error-container" class="error-message"></div>
 
         <div class="dashboard">
             <div class="card success">
@@ -282,12 +280,9 @@
         // Se tá em github.dev (Codespaces), muda a porta de 8888 pra 8080
         let API_URL;
         if (host.includes('github.dev')) {
-            // Em Codespaces: https://psychic-pancake-wvgjw67w-8888.app.github.dev
-            // Muda pra: https://psychic-pancake-wvgjw67w-8080.app.github.dev
             const baseHost = host.replace('-8888.', '-8080.');
             API_URL = `${protocol}//${baseHost}`;
         } else {
-            // Em localhost
             API_URL = `http://localhost:8080`;
         }
         
@@ -296,12 +291,12 @@
 
         let successFailureChart = null;
         let timingChart = null;
-        let timingData = [];
+        let timingDataArray = [];
         let errorCounts = {};
+        let hasConnectedOnce = false;
 
         async function fetchMetrics() {
             try {
-                // Fetch all metrics
                 const successResp = await fetch(`${METRICS_URL}/transfer.success.total`);
                 const failureResp = await fetch(`${METRICS_URL}/transfer.failure.total`);
                 const timingResp = await fetch(`${METRICS_URL}/transfer.processing.time`);
@@ -313,22 +308,27 @@
                 const healthData = healthResp.ok ? await healthResp.json() : null;
 
                 updateDashboard(successData, failureData, timingData, healthData);
-                clearError();
+                
+                if (!hasConnectedOnce) {
+                    clearError();
+                    hasConnectedOnce = true;
+                }
             } catch (error) {
-                showError('Não consegui conectar ao servidor. Certifique-se que a app está rodando em http://localhost:8080');
+                if (!hasConnectedOnce) {
+                    showError('Não consegui conectar ao servidor. Certifique-se que a app está rodando em http://localhost:8080');
+                }
                 console.error('Error:', error);
             }
         }
 
         function updateDashboard(successData, failureData, timingData, healthData) {
-            // Update counts
             const successCount = successData?.measurements[0]?.value || 0;
             const failureCount = failureData?.measurements[0]?.value || 0;
 
             document.getElementById('success-count').textContent = Math.floor(successCount);
             document.getElementById('failure-count').textContent = Math.floor(failureCount);
 
-            // Update timing
+            // Update timing - CORRIGIDO: usar timingDataArray (global)
             if (timingData) {
                 const measurements = timingData.measurements;
                 const count = measurements.find(m => m.statistic === 'COUNT')?.value || 0;
@@ -337,10 +337,9 @@
                 
                 document.getElementById('avg-time').textContent = avgTime;
 
-                // Add to timing data for chart
                 if (avgTime > 0) {
-                    timingData.push(parseInt(avgTime));
-                    if (timingData.length > 10) timingData.shift();
+                    timingDataArray.push(parseInt(avgTime));
+                    if (timingDataArray.length > 10) timingDataArray.shift();
                 }
             }
 
@@ -352,19 +351,17 @@
                 document.getElementById('health-label').textContent = healthData.status === 'UP' ? 'Aplicação rodando' : 'Aplicação offline';
             }
 
-            // Extract error types from failure metrics
+            // Extract error types
             if (failureData?.availableTags) {
                 const errorTag = failureData.availableTags.find(t => t.tag === 'error_type');
                 if (errorTag) {
                     errorCounts = {};
                     errorTag.values.forEach(errorType => {
-                        errorCounts[errorType] = errorCounts[errorType] || 0;
-                        errorCounts[errorType]++;
+                        errorCounts[errorType] = (errorCounts[errorType] || 0) + 1;
                     });
                 }
             }
 
-            // Update charts
             updateCharts(successCount, failureCount);
             updateErrorTypes();
         }
@@ -391,6 +388,7 @@
                     },
                     options: {
                         responsive: true,
+                        maintainAspectRatio: true,
                         plugins: {
                             legend: {
                                 position: 'bottom'
@@ -402,27 +400,32 @@
 
             // Timing Chart
             if (timingChart) {
-                timingChart.data.datasets[0].data = timingData;
+                timingChart.data.labels = Array.from({length: timingDataArray.length}, (_, i) => i + 1);
+                timingChart.data.datasets[0].data = timingDataArray;
                 timingChart.update();
             } else {
                 timingChart = new Chart(ctx2, {
                     type: 'line',
                     data: {
-                        labels: Array.from({length: timingData.length}, (_, i) => i + 1),
+                        labels: Array.from({length: timingDataArray.length}, (_, i) => i + 1),
                         datasets: [{
                             label: 'Tempo (ms)',
-                            data: timingData,
+                            data: timingDataArray,
                             borderColor: '#f59e0b',
                             backgroundColor: 'rgba(245, 158, 11, 0.1)',
                             tension: 0.4,
-                            fill: true
+                            fill: true,
+                            pointRadius: 4,
+                            pointBackgroundColor: '#f59e0b'
                         }]
                     },
                     options: {
                         responsive: true,
+                        maintainAspectRatio: true,
                         scales: {
                             y: {
-                                beginAtZero: true
+                                beginAtZero: true,
+                                min: 0
                             }
                         },
                         plugins: {
@@ -456,11 +459,13 @@
 
         function showError(message) {
             const errorContainer = document.getElementById('error-container');
-            errorContainer.innerHTML = `<div class="error-message">${message}</div>`;
+            errorContainer.textContent = message;
+            errorContainer.classList.add('show');
         }
 
         function clearError() {
-            document.getElementById('error-container').innerHTML = '';
+            const errorContainer = document.getElementById('error-container');
+            errorContainer.classList.remove('show');
         }
 
         // Initial fetch
