@@ -49,6 +49,7 @@ All automation scripts organized by purpose.
 | Script | Purpose |
 |--------|---------|
 | `start-app.sh` | Start Spring Boot application |
+| `stop-app.sh` | Stop Spring Boot application |
 
 ### Demo & Testing
 | Script | Purpose |

@@ -130,6 +130,7 @@ All automation scripts organized by purpose in the `scripts/` folder:
 
 **Application:**
 - `scripts/start-app.sh` - Start Spring Boot app
+- `scripts/stop-app.sh` - Stop Spring Boot app
 
 **Initialization:**
 - `scripts/init-infrastructure.sh` - Create topics, queue, data
