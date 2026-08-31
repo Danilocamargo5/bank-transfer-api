@@ -52,7 +52,7 @@ class TransferControllerTest {
     fun `should accept valid transfer request`() {
         // Given
         every { kafkaTemplate.send(any(), any(), any()) } returns mockk()
-        every { transferMetrics.recordKafkaPublish(any(), any()) } answers { }
+        every { transferMetrics.recordKafkaPublish(any(), any()) } justRuns
         
         // When
         val response = transferController.createTransfer(validRequest)
@@ -67,7 +67,7 @@ class TransferControllerTest {
     fun `should reject empty transferId`() {
         // Given
         val invalid = validRequest.copy(transferId = "")
-        every { transferMetrics.recordKafkaPublish(any(), any()) } answers { }
+        every { transferMetrics.recordKafkaPublish(any(), any()) } justRuns
         
         // When
         val response = transferController.createTransfer(invalid)
@@ -82,7 +82,7 @@ class TransferControllerTest {
     fun `should reject zero amount`() {
         // Given
         val invalid = validRequest.copy(amount = BigDecimal.ZERO)
-        every { transferMetrics.recordKafkaPublish(any(), any()) } answers { }
+        every { transferMetrics.recordKafkaPublish(any(), any()) } justRuns
         
         // When
         val response = transferController.createTransfer(invalid)
@@ -100,7 +100,7 @@ class TransferControllerTest {
             sourceAccountId = "acc-001",
             destinationAccountId = "acc-001"
         )
-        every { transferMetrics.recordKafkaPublish(any(), any()) } answers { }
+        every { transferMetrics.recordKafkaPublish(any(), any()) } justRuns
         
         // When
         val response = transferController.createTransfer(invalid)
@@ -115,7 +115,7 @@ class TransferControllerTest {
     fun `should handle kafka publishing error`() {
         // Given
         every { kafkaTemplate.send(any(), any(), any()) } throws RuntimeException("Kafka error")
-        every { transferMetrics.recordKafkaPublish(any(), any()) } answers { }
+        every { transferMetrics.recordKafkaPublish(any(), any()) } justRuns
         
         // When
         val response = transferController.createTransfer(validRequest)

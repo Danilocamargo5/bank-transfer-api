@@ -78,7 +78,7 @@ class TransferKafkaConsumerTest {
         )
         
         every { transferService.processTransfer(any()) } returns TransferService.Result.Failure(failureEvent)
-        every { sqsPublisher.publishTransferFailed(any()) } answers { }
+        every { sqsPublisher.publishTransferFailed(any()) } justRuns
         
         // When
         consumer.consumeTransferRequest(validMessage)
@@ -91,7 +91,7 @@ class TransferKafkaConsumerTest {
     fun `should handle malformed message gracefully`() {
         // Given
         val malformedMessage = "{invalid json"
-        every { sqsPublisher.publishTransferFailed(any()) } answers { }
+        every { sqsPublisher.publishTransferFailed(any()) } justRuns
         
         // When & Then
         try {
