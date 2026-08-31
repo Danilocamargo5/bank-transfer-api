@@ -75,6 +75,7 @@ class TransferServiceTest {
         every { accountRepository.findById("acc-001") } returns Optional.of(sourceAccount)
         every { accountRepository.findById("acc-002") } returns Optional.of(destinationAccount)
         every { accountRepository.save(any()) } returns sourceAccount
+        every { transferRepository.save(any()) } returns mockk()
         every { transferMetrics.recordTransferProcessingTime(any()) } just runs
         every { transferMetrics.recordTransferSuccess() } just runs
         
@@ -106,6 +107,7 @@ class TransferServiceTest {
         every { accountRepository.findById("acc-001") } returns Optional.empty()
         every { transferRepository.save(any()) } returns mockk()
         every { transferMetrics.recordTransferProcessingTime(any()) } just runs
+        every { transferRepository.save(any()) } returns mockk()
         every { transferMetrics.recordTransferFailure(any()) } just runs
         
         // When & Then
@@ -121,6 +123,7 @@ class TransferServiceTest {
         every { transferRepository.hasCompletedTransfer("tf-001") } returns false
         every { accountRepository.findById("acc-001") } returns Optional.of(poorAccount)
         every { accountRepository.findById("acc-002") } returns Optional.of(destinationAccount)
+        every { transferRepository.save(any()) } returns mockk()
         every { transferRepository.save(any()) } returns mockk()
         every { transferMetrics.recordTransferProcessingTime(any()) } just runs
         every { transferMetrics.recordTransferFailure(any()) } just runs
@@ -138,6 +141,7 @@ class TransferServiceTest {
         every { transferRepository.hasCompletedTransfer("tf-001") } returns false
         every { accountRepository.findById("acc-001") } returns Optional.of(inactiveAccount)
         every { accountRepository.findById("acc-002") } returns Optional.of(destinationAccount)
+        every { transferRepository.save(any()) } returns mockk()
         every { transferRepository.save(any()) } returns mockk()
         every { transferMetrics.recordTransferProcessingTime(any()) } just runs
         every { transferMetrics.recordTransferFailure(any()) } just runs
