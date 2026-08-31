@@ -25,6 +25,7 @@ git pull origin develop
 ./full-setup.sh
 
 # Wait for: "✅ Infrastructure Ready!"
+# This creates Kafka topics and SQS queue
 ```
 
 ### Terminal 2: Start Application
@@ -32,6 +33,10 @@ git pull origin develop
 ./scripts/start-app.sh
 
 # Wait for: "DynamoDB tables initialized successfully!"
+# ⚠️ IMPORTANT: This automatically:
+#    - Creates DynamoDB tables
+#    - Loads sample account data (acc-123, acc-456, acc-789, acc-000)
+#    - Starts Spring Boot API on port 8080
 ```
 
 ### Terminal 3: Generate Test Data (Optional)
@@ -63,14 +68,14 @@ If you prefer to run each step manually:
 # This starts Kafka and LocalStack (DynamoDB, SQS)
 ```
 
-### Terminal 2: Initialize Infrastructure
+### Terminal 2: Initialize Kafka and SQS
 ```bash
-./scripts/init-infrastructure.sh
+./scripts/init-kafka.sh
+./scripts/init-sqs.sh
 
 # This creates:
 # - Kafka topics (transfer-requested, transfer-completed)
 # - SQS queue (transfer-failed DLQ)
-# - Sample account data (acc-123, acc-456, acc-789, acc-000)
 ```
 
 ### Terminal 1: Start Application
@@ -78,6 +83,66 @@ If you prefer to run each step manually:
 ./scripts/start-app.sh
 
 # Wait for: "DynamoDB tables initialized successfully!"
+# ⚠️ IMPORTANT: This automatically creates and populates DynamoDB:
+#    - Creates 'accounts' table
+#    - Creates 'transactions' table
+#    - Loads sample data:
+#      * acc-123: João Silva - 5000.00 BRL (ACTIVE)
+#      * acc-456: Maria Santos - 1200.50 BRL (ACTIVE)
+#      * acc-789: Pedro Costa - 300.00 BRL (ACTIVE)
+#      * acc-000: Conta Encerrada - 0.00 BRL (INACTIVE)
+```
+
+### (Optional) Reinitialize Sample Data
+If you need to reload sample data after running demos:
+```bash
+./scripts/init-dynamodb.sh
+```
+
+## Initialization Scripts
+
+### init-infrastructure.sh
+Runs all initialization at once:
+```bash
+./scripts/init-infrastructure.sh
+```
+
+This executes in order:
+1. `init-kafka.sh` - Creates Kafka topics
+2. `init-sqs.sh` - Creates SQS queue
+3. `init-dynamodb.sh` - Inserts sample account data
+
+### Data Loading Timeline
+
+```
+Terminal 1: ./scripts/start-infra.sh
+  → Docker starts
+  → Kafka initializes (KRaft mode)
+  → LocalStack starts (DynamoDB, SQS)
+  ✅ "Services ready!"
+
+Terminal 2: ./scripts/init-kafka.sh && ./scripts/init-sqs.sh
+  → Kafka topics created
+  → SQS queue created
+  ✅ Ready for messages
+
+Terminal 1: ./scripts/start-app.sh
+  → Spring Boot starts
+  → DynamoDBInitializer runs (Spring Boot startup)
+  → Creates 'accounts' table
+  → Creates 'transactions' table
+  → Loads 4 sample accounts (acc-123, acc-456, acc-789, acc-000)
+  ✅ "DynamoDB tables initialized successfully!"
+  ✅ API ready on http://localhost:8080
+
+Terminal 3: ./scripts/DEMO2.sh
+  → Sends 40+ transfer requests
+  → Kafka processes messages
+  → Data stored in DynamoDB
+  → Metrics collected
+
+Terminal 4: Open dashboard
+  → See all metrics populated
 ```
 
 ## Available Scripts
@@ -91,10 +156,10 @@ If you prefer to run each step manually:
 - `stop-app.sh` - Stop Spring Boot application
 
 ### Initialization
-- `init-infrastructure.sh` - Create topics, queue, and sample data
+- `init-infrastructure.sh` - Create topics, queue, and sample data (all at once)
 - `init-kafka.sh` - Create Kafka topics only
 - `init-sqs.sh` - Create SQS queue only
-- `init-dynamodb.sh` - Insert sample account data only
+- `init-dynamodb.sh` - Insert sample account data (or re-insert after demos)
 
 ### Testing & Demo
 - `DEMO.sh` - Run basic demo (8 test scenarios)
