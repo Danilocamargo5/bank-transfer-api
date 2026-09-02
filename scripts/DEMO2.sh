@@ -23,14 +23,18 @@ echo ""
 
 # Publish 40 transfers
 for i in {1..40}; do
+  AMOUNT=$((RANDOM % 1000 + 10))
+  HOUR=$((i / 60))
+  MINUTE=$((i % 60))
+  
   TRANSFER=$(cat <<JSON
 {
   "transferId":"tf-demo-bulk-$(printf "%03d" $i)",
   "sourceAccountId":"acc-123",
   "destinationAccountId":"acc-456",
-  "amount":$((RANDOM % 1000 + 10)).00,
+  "amount":$AMOUNT.00,
   "currency":"BRL",
-  "requestedAt":"2026-08-28T21:$((i / 60)):$(printf "%02d" $((i % 60)))Z"
+  "requestedAt":"2026-08-28T21:$(printf "%02d" $HOUR):$(printf "%02d" $MINUTE)Z"
 }
 JSON
 )
