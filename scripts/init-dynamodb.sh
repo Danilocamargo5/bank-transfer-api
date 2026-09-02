@@ -2,7 +2,36 @@
 
 set -e
 
-echo "💾 Creating sample accounts in DynamoDB..."
+echo "💾 Creating DynamoDB tables..."
+echo ""
+
+# Create accounts table
+echo "Creating table: accounts"
+docker-compose exec localstack aws dynamodb create-table \
+  --table-name accounts \
+  --attribute-definitions AttributeName=accountId,AttributeType=S \
+  --key-schema AttributeName=accountId,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST \
+  --endpoint-url http://localhost:4566 2>/dev/null || echo "  (table may already exist)"
+
+echo ""
+
+# Create transfers table
+echo "Creating table: transfers"
+docker-compose exec localstack aws dynamodb create-table \
+  --table-name transfers \
+  --attribute-definitions AttributeName=transferId,AttributeType=S AttributeName=requestedAt,AttributeType=S \
+  --key-schema AttributeName=transferId,KeyType=HASH AttributeName=requestedAt,KeyType=RANGE \
+  --billing-mode PAY_PER_REQUEST \
+  --endpoint-url http://localhost:4566 2>/dev/null || echo "  (table may already exist)"
+
+echo ""
+echo "=========================================="
+echo "✅ DynamoDB tables created!"
+echo "=========================================="
+echo ""
+
+echo "💾 Populating sample accounts in DynamoDB..."
 echo ""
 
 # Example 1: João Silva - ACTIVE with good balance
@@ -42,41 +71,7 @@ echo "=========================================="
 echo "✅ All sample accounts created!"
 echo "=========================================="
 echo ""
+
 echo "📊 Accounts in DynamoDB:"
 docker-compose exec localstack aws dynamodb scan --table-name accounts --endpoint-url http://localhost:4566 --query 'Items[*].[accountId.S, customerName.S, balance.N, status.S]' --output table
-echo ""
-echo "🧪 Test commands:"
-echo ""
-echo "Success transfer (acc-123 → acc-456):"
-echo '  curl -X POST http://localhost:8080/api/v1/transfers -H "Content-Type: application/json" -d '"'"'{
-    "transferId":"tf-test-001",
-    "sourceAccountId":"acc-123",
-    "destinationAccountId":"acc-456",
-    "amount":100.00,
-    "currency":"BRL",
-    "requestedAt":"2026-08-28T20:00:00Z"
-  }'"'"''
-echo ""
-echo "Failed transfer (inactive account):"
-echo '  curl -X POST http://localhost:8080/api/v1/transfers -H "Content-Type: application/json" -d '"'"'{
-    "transferId":"tf-fail-001",
-    "sourceAccountId":"acc-000",
-    "destinationAccountId":"acc-456",
-    "amount":100.00,
-    "currency":"BRL",
-    "requestedAt":"2026-08-28T20:00:00Z"
-  }'"'"''
-echo ""
-echo "Insufficient balance:"
-echo '  curl -X POST http://localhost:8080/api/v1/transfers -H "Content-Type: application/json" -d '"'"'{
-    "transferId":"tf-fail-002",
-    "sourceAccountId":"acc-789",
-    "destinationAccountId":"acc-456",
-    "amount":1000.00,
-    "currency":"BRL",
-    "requestedAt":"2026-08-28T20:00:00Z"
-  }'"'"''
-echo ""
-echo "View metrics:"
-echo "  curl http://localhost:8080/actuator/metrics"
 echo ""
