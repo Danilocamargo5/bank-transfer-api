@@ -3,7 +3,7 @@
 set -e
 
 echo "🚀 Starting Docker services..."
-docker-compose up -d kafka localstack
+docker-compose up -d kafka localstack kafka-ui
 
 echo "⏳ Waiting 120s for services to be fully ready..."
 sleep 120
