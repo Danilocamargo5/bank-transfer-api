@@ -1,213 +1,137 @@
 #!/bin/bash
 
 ##############################################################################
-# Bank Transfer API - Demo Script
-# Apresentação de Transferências Bancárias
+# Bank Transfer API - Demo Script (Kafka Publisher)
+# Publica mensagens direto no tópico Kafka transfer-requested
 #
 # Uso: ./DEMO.sh
 ##############################################################################
 
 set -e
 
-API_URL="http://localhost:8080"
-METRICS_URL="$API_URL/actuator/metrics"
-HEALTH_URL="$API_URL/actuator/health"
-DLQ_URL="http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/transfer-failed"
+KAFKA_BROKER="kafka:29092"
 
 # Cores para output
-RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 echo -e "${BLUE}=========================================="
-echo "Bank Transfer API - Demo"
+echo "Bank Transfer API - Demo (Publishing to Kafka)"
 echo "==========================================${NC}"
 echo ""
 
-# Check health
-echo -e "${BLUE}1️⃣ Verificando saúde da aplicação...${NC}"
-curl -s "$HEALTH_URL" | jq .
+# Transfer 1
+echo -e "${GREEN}1️⃣ Transfer SUCESSO: acc-123 → acc-456${NC}"
+echo ""
+TRANSFER_1=$(cat <<'JSON'
+{
+  "transferId":"tf-demo-success-001",
+  "sourceAccountId":"acc-123",
+  "destinationAccountId":"acc-456",
+  "amount":100.00,
+  "currency":"BRL",
+  "requestedAt":"2026-08-28T20:00:00Z"
+}
+JSON
+)
+
+echo "$TRANSFER_1" | docker-compose exec -T kafka kafka-console-producer \
+  --broker-list localhost:9092 \
+  --topic transfer-requested
+
+echo -e "${GREEN}✅ Transfer 1 publicada${NC}"
 echo ""
 
-# Success transfer
-echo -e "${GREEN}2️⃣ Transferência com SUCESSO${NC}"
-echo "De: acc-123 (João Silva - 5000.00) → Para: acc-456 (Maria Santos - 1200.50)"
-echo "Valor: 100.00 BRL"
+# Transfer 2
+echo -e "${GREEN}2️⃣ Transfer SUCESSO: acc-456 → acc-789${NC}"
 echo ""
-RESPONSE=$(curl -s -X POST "$API_URL/api/v1/transfers" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "transferId":"tf-demo-success-001",
-    "sourceAccountId":"acc-123",
-    "destinationAccountId":"acc-456",
-    "amount":100.00,
-    "currency":"BRL",
-    "requestedAt":"2026-08-28T20:00:00Z"
-  }')
-echo "$RESPONSE" | jq .
+TRANSFER_2=$(cat <<'JSON'
+{
+  "transferId":"tf-demo-success-002",
+  "sourceAccountId":"acc-456",
+  "destinationAccountId":"acc-789",
+  "amount":50.00,
+  "currency":"BRL",
+  "requestedAt":"2026-08-28T20:05:00Z"
+}
+JSON
+)
+
+echo "$TRANSFER_2" | docker-compose exec -T kafka kafka-console-producer \
+  --broker-list localhost:9092 \
+  --topic transfer-requested
+
+echo -e "${GREEN}✅ Transfer 2 publicada${NC}"
 echo ""
 
-sleep 2
-
-# Inactive account transfer
-echo -e "${RED}3️⃣ Transferência com FALHA - Conta Inativa${NC}"
-echo "De: acc-000 (Conta Encerrada - INACTIVE) → Para: acc-456"
-echo "Valor: 100.00 BRL"
+# Transfer 3
+echo -e "${GREEN}3️⃣ Transfer FAIL: saldo insuficiente${NC}"
 echo ""
-RESPONSE=$(curl -s -X POST "$API_URL/api/v1/transfers" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "transferId":"tf-demo-inactive-001",
-    "sourceAccountId":"acc-000",
-    "destinationAccountId":"acc-456",
-    "amount":100.00,
-    "currency":"BRL",
-    "requestedAt":"2026-08-28T20:00:00Z"
-  }')
-echo "$RESPONSE" | jq .
-echo ""
+TRANSFER_3=$(cat <<'JSON'
+{
+  "transferId":"tf-demo-fail-001",
+  "sourceAccountId":"acc-123",
+  "destinationAccountId":"acc-456",
+  "amount":10000.00,
+  "currency":"BRL",
+  "requestedAt":"2026-08-28T20:10:00Z"
+}
+JSON
+)
 
-sleep 2
+echo "$TRANSFER_3" | docker-compose exec -T kafka kafka-console-producer \
+  --broker-list localhost:9092 \
+  --topic transfer-requested
 
-# Insufficient balance
-echo -e "${RED}4️⃣ Transferência com FALHA - Saldo Insuficiente${NC}"
-echo "De: acc-789 (Pedro Costa - 300.00) → Para: acc-456"
-echo "Valor: 1000.00 BRL (saldo insuficiente!)"
-echo ""
-RESPONSE=$(curl -s -X POST "$API_URL/api/v1/transfers" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "transferId":"tf-demo-insufficient-001",
-    "sourceAccountId":"acc-789",
-    "destinationAccountId":"acc-456",
-    "amount":1000.00,
-    "currency":"BRL",
-    "requestedAt":"2026-08-28T20:00:00Z"
-  }')
-echo "$RESPONSE" | jq .
+echo -e "${GREEN}✅ Transfer 3 publicada${NC}"
 echo ""
 
-sleep 2
-
-# Validation error - zero amount
-echo -e "${RED}5️⃣ Validação - Valor Zero${NC}"
-echo "Tentativa de transferência com valor 0.00"
+# Transfer 4
+echo -e "${GREEN}4️⃣ Transfer FAIL: conta inativa${NC}"
 echo ""
-RESPONSE=$(curl -s -X POST "$API_URL/api/v1/transfers" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "transferId":"tf-demo-zero-001",
-    "sourceAccountId":"acc-123",
-    "destinationAccountId":"acc-456",
-    "amount":0.00,
-    "currency":"BRL",
-    "requestedAt":"2026-08-28T20:00:00Z"
-  }')
-echo "$RESPONSE" | jq .
-echo ""
+TRANSFER_4=$(cat <<'JSON'
+{
+  "transferId":"tf-demo-fail-002",
+  "sourceAccountId":"acc-123",
+  "destinationAccountId":"acc-000",
+  "amount":500.00,
+  "currency":"BRL",
+  "requestedAt":"2026-08-28T20:15:00Z"
+}
+JSON
+)
 
-sleep 1
+echo "$TRANSFER_4" | docker-compose exec -T kafka kafka-console-producer \
+  --broker-list localhost:9092 \
+  --topic transfer-requested
 
-# Validation error - same account
-echo -e "${RED}6️⃣ Validação - Mesma Conta${NC}"
-echo "Tentativa de transferência para a mesma conta"
-echo ""
-RESPONSE=$(curl -s -X POST "$API_URL/api/v1/transfers" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "transferId":"tf-demo-same-001",
-    "sourceAccountId":"acc-123",
-    "destinationAccountId":"acc-123",
-    "amount":100.00,
-    "currency":"BRL",
-    "requestedAt":"2026-08-28T20:00:00Z"
-  }')
-echo "$RESPONSE" | jq .
+echo -e "${GREEN}✅ Transfer 4 publicada${NC}"
 echo ""
 
-sleep 1
+# Transfer 5-8
+for i in {5..8}; do
+  TRANSFER=$(cat <<JSON
+{
+  "transferId":"tf-demo-batch-00$i",
+  "sourceAccountId":"acc-123",
+  "destinationAccountId":"acc-456",
+  "amount":$((i * 50)).00,
+  "currency":"BRL",
+  "requestedAt":"2026-08-28T20:$((i*5)):00Z"
+}
+JSON
+)
+  
+  echo "$TRANSFER" | docker-compose exec -T kafka kafka-console-producer \
+    --broker-list localhost:9092 \
+    --topic transfer-requested
+  
+  echo -e "${GREEN}✅ Transfer $i publicada${NC}"
+done
 
-# Validation error - account not found
-echo -e "${RED}7️⃣ Validação - Conta Não Existe${NC}"
-echo "Tentativa de transferência com conta inexistente"
 echo ""
-RESPONSE=$(curl -s -X POST "$API_URL/api/v1/transfers" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "transferId":"tf-demo-notfound-001",
-    "sourceAccountId":"acc-999",
-    "destinationAccountId":"acc-456",
-    "amount":100.00,
-    "currency":"BRL",
-    "requestedAt":"2026-08-28T20:00:00Z"
-  }')
-echo "$RESPONSE" | jq .
-echo ""
-
-sleep 1
-
-# Idempotency test
-echo -e "${YELLOW}8️⃣ IDEMPOTÊNCIA - Mesma transferência 2x${NC}"
-echo "Primeira tentativa (vai processar):"
-echo ""
-RESPONSE=$(curl -s -X POST "$API_URL/api/v1/transfers" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "transferId":"tf-demo-idempotent-001",
-    "sourceAccountId":"acc-123",
-    "destinationAccountId":"acc-456",
-    "amount":50.00,
-    "currency":"BRL",
-    "requestedAt":"2026-08-28T20:00:00Z"
-  }')
-echo "$RESPONSE" | jq .
-echo ""
-
-sleep 2
-
-echo -e "${YELLOW}Segunda tentativa (MESMO transferId - será rejeitada como duplicada):${NC}"
-echo ""
-RESPONSE=$(curl -s -X POST "$API_URL/api/v1/transfers" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "transferId":"tf-demo-idempotent-001",
-    "sourceAccountId":"acc-123",
-    "destinationAccountId":"acc-456",
-    "amount":50.00,
-    "currency":"BRL",
-    "requestedAt":"2026-08-28T20:00:00Z"
-  }')
-echo "$RESPONSE" | jq .
-echo ""
-
-sleep 2
-
-# Metrics
-echo -e "${BLUE}📊 MÉTRICAS${NC}"
-echo ""
-echo "Transfer Processing Time:"
-curl -s "$METRICS_URL/transfer.processing.time" | jq .
-echo ""
-
-echo "Transfer Success Total:"
-curl -s "$METRICS_URL/transfer.success.total" | jq .
-echo ""
-
-echo "Transfer Failure Total:"
-curl -s "$METRICS_URL/transfer.failure.total" | jq .
-echo ""
-
-# DLQ
-echo -e "${BLUE}📬 DEAD LETTER QUEUE (Mensagens com Falha)${NC}"
-echo ""
-docker-compose exec localstack aws sqs receive-message \
-  --queue-url "$DLQ_URL" \
-  --endpoint-url http://localhost:4566 \
-  --region us-east-1 | jq '.Messages[0].Body | fromjson' 2>/dev/null || echo "Nenhuma mensagem na DLQ"
-echo ""
-
-echo -e "${GREEN}=========================================="
-echo "✅ Demo completa!"
+echo -e "${BLUE}=========================================="
+echo "✅ DEMO: 8 Transfers publicadas no Kafka!"
 echo "==========================================${NC}"
+echo ""
