@@ -91,7 +91,6 @@ echo ""
 echo -e "${YELLOW}Publishing 5 INVALID_CURRENCY transfers...${NC}"
 for i in {1..5}; do
   AMOUNT=$((i * 75))
-  CURRENCY=$(["USD", "EUR", "GBP", "JPY", "CAD"] | sed -n "$((i))p")
   TRANSFER=$(cat <<JSON
 {
   "transferId":"tf-demo-invalid-currency-$(printf "%02d" $i)",
@@ -115,6 +114,6 @@ echo "✅ DEMO: 30 Transfers publicadas no Kafka!"
 echo "   - 10 SUCCESS (acc-123 → acc-456)"
 echo "   - 8 INSUFFICIENT_BALANCE"
 echo "   - 7 INACTIVE_ACCOUNT (acc-000)"
-echo "   - 5 INVALID_CURRENCY"
+echo "   - 5 INVALID_CURRENCY (USD)"
 echo "==========================================${NC}"
 echo ""
