@@ -2,6 +2,7 @@ package com.danilo.banktransfer.api.controller
 
 import com.danilo.banktransfer.domain.dto.TransferRequestDTO
 import com.danilo.banktransfer.domain.dto.TransferResponseDTO
+import com.danilo.banktransfer.domain.model.Transfer
 import com.danilo.banktransfer.domain.validator.TransferValidator
 import com.danilo.banktransfer.infrastructure.repository.TransferRepository
 import com.danilo.banktransfer.application.exception.TransferException
@@ -21,6 +22,13 @@ class TransferController(
     private val transferRepository: TransferRepository
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
+
+    @GetMapping
+    fun getAllTransfers(): ResponseEntity<List<TransferResponseDTO>> {
+        logger.info("Fetching all transfers")
+        val transfers = transferRepository.findAll()
+        return ResponseEntity.ok(transfers.map { toDTO(it) })
+    }
 
     @PostMapping
     fun createTransfer(@RequestBody request: TransferRequestDTO): ResponseEntity<TransferResponseDTO> {
@@ -76,13 +84,15 @@ class TransferController(
             )
         } else {
             val transfer = transfers[0]
-            ResponseEntity.ok(
-                TransferResponseDTO(
-                    transferId = transferId,
-                    status = transfer.status.name,
-                    message = transfer.failureReason ?: "Transfer ${transfer.status.name}"
-                )
-            )
+            ResponseEntity.ok(toDTO(transfer))
         }
+    }
+
+    private fun toDTO(transfer: Transfer): TransferResponseDTO {
+        return TransferResponseDTO(
+            transferId = transfer.transferId,
+            status = transfer.status.name,
+            message = transfer.failureReason ?: "Transfer ${transfer.status.name}"
+        )
     }
 }

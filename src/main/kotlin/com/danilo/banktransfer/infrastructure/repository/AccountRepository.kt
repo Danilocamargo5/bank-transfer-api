@@ -5,8 +5,10 @@ import com.danilo.banktransfer.infrastructure.mapper.AccountMapper
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Repository
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
+import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest
+import software.amazon.awssdk.services.dynamodb.model.ScanRequest
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import java.util.Optional
 
@@ -40,6 +42,28 @@ class AccountRepository(
         } else {
             Optional.empty()
         }
+    }
+
+    fun findAll(): List<Account> {
+        val request = ScanRequest.builder()
+            .tableName(tableName)
+            .build()
+
+        val response = dynamoDbClient.scan(request)
+        return response.items().map { AccountMapper.fromDynamoDBItem(it) }
+    }
+
+    fun deleteById(accountId: String) {
+        val request = DeleteItemRequest.builder()
+            .tableName(tableName)
+            .key(mapOf("accountId" to AttributeValue.builder().s(accountId).build()))
+            .build()
+
+        dynamoDbClient.deleteItem(request)
+    }
+
+    fun existsById(accountId: String): Boolean {
+        return findById(accountId).isPresent
     }
 
     fun exists(accountId: String): Boolean {

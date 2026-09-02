@@ -9,6 +9,7 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest
 import software.amazon.awssdk.services.dynamodb.model.QueryRequest
+import software.amazon.awssdk.services.dynamodb.model.ScanRequest
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import java.util.Optional
 
@@ -42,6 +43,15 @@ class TransferRepository(
         } else {
             Optional.empty()
         }
+    }
+
+    fun findAll(): List<Transfer> {
+        val request = ScanRequest.builder()
+            .tableName(tableName)
+            .build()
+
+        val response = dynamoDbClient.scan(request)
+        return response.items().map { TransferMapper.fromDynamoDBItem(it) }
     }
 
     fun findByTransferId(transferId: String): List<Transfer> {
