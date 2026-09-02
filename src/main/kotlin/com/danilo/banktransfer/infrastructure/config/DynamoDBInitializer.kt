@@ -16,6 +16,10 @@ import org.slf4j.LoggerFactory
 
 private val logger = LoggerFactory.getLogger("DynamoDBInitializer")
 
+// DISABLED: Tables are now created and populated by ./scripts/init-dynamodb.sh in full-setup.sh
+// This runs before app starts, so tables already exist when consumer processes messages
+// Tables must exist BEFORE consumer tries to process messages from Kafka
+/*
 @Component
 class DynamoDBInitializer(
     private val dynamoDbClient: DynamoDbClient,
@@ -97,3 +101,4 @@ class DynamoDBInitializer(
         }
     }
 }
+*/
