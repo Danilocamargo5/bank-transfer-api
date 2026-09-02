@@ -1,137 +1,120 @@
 #!/bin/bash
 
 ##############################################################################
-# Bank Transfer API - Demo Script (Kafka Publisher)
-# Publica mensagens direto no tópico Kafka transfer-requested
+# Bank Transfer API - Demo Script
+# Publica 30 mensagens direto no tópico Kafka transfer-requested
+# Cobre: sucesso, saldo insuficiente, conta inativa, transferências normais
 #
 # Uso: ./DEMO.sh
 ##############################################################################
 
 set -e
 
-KAFKA_BROKER="kafka:29092"
-
 # Cores para output
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
 NC='\033[0m'
 
 echo -e "${BLUE}=========================================="
-echo "Bank Transfer API - Demo (Publishing to Kafka)"
+echo "Bank Transfer API - Demo (30 Test Transfers)"
 echo "==========================================${NC}"
 echo ""
 
-# Transfer 1
-echo -e "${GREEN}1️⃣ Transfer SUCESSO: acc-123 → acc-456${NC}"
-echo ""
-TRANSFER_1=$(cat <<'JSON'
-{
-  "transferId":"tf-demo-success-001",
-  "sourceAccountId":"acc-123",
-  "destinationAccountId":"acc-456",
-  "amount":100.00,
-  "currency":"BRL",
-  "requestedAt":"2026-08-28T20:00:00Z"
-}
-JSON
-)
-
-echo "$TRANSFER_1" | docker-compose exec -T kafka kafka-console-producer \
-  --broker-list localhost:9092 \
-  --topic transfer-requested
-
-echo -e "${GREEN}✅ Transfer 1 publicada${NC}"
-echo ""
-
-# Transfer 2
-echo -e "${GREEN}2️⃣ Transfer SUCESSO: acc-456 → acc-789${NC}"
-echo ""
-TRANSFER_2=$(cat <<'JSON'
-{
-  "transferId":"tf-demo-success-002",
-  "sourceAccountId":"acc-456",
-  "destinationAccountId":"acc-789",
-  "amount":50.00,
-  "currency":"BRL",
-  "requestedAt":"2026-08-28T20:05:00Z"
-}
-JSON
-)
-
-echo "$TRANSFER_2" | docker-compose exec -T kafka kafka-console-producer \
-  --broker-list localhost:9092 \
-  --topic transfer-requested
-
-echo -e "${GREEN}✅ Transfer 2 publicada${NC}"
-echo ""
-
-# Transfer 3
-echo -e "${GREEN}3️⃣ Transfer FAIL: saldo insuficiente${NC}"
-echo ""
-TRANSFER_3=$(cat <<'JSON'
-{
-  "transferId":"tf-demo-fail-001",
-  "sourceAccountId":"acc-123",
-  "destinationAccountId":"acc-456",
-  "amount":10000.00,
-  "currency":"BRL",
-  "requestedAt":"2026-08-28T20:10:00Z"
-}
-JSON
-)
-
-echo "$TRANSFER_3" | docker-compose exec -T kafka kafka-console-producer \
-  --broker-list localhost:9092 \
-  --topic transfer-requested
-
-echo -e "${GREEN}✅ Transfer 3 publicada${NC}"
-echo ""
-
-# Transfer 4
-echo -e "${GREEN}4️⃣ Transfer FAIL: conta inativa${NC}"
-echo ""
-TRANSFER_4=$(cat <<'JSON'
-{
-  "transferId":"tf-demo-fail-002",
-  "sourceAccountId":"acc-123",
-  "destinationAccountId":"acc-000",
-  "amount":500.00,
-  "currency":"BRL",
-  "requestedAt":"2026-08-28T20:15:00Z"
-}
-JSON
-)
-
-echo "$TRANSFER_4" | docker-compose exec -T kafka kafka-console-producer \
-  --broker-list localhost:9092 \
-  --topic transfer-requested
-
-echo -e "${GREEN}✅ Transfer 4 publicada${NC}"
-echo ""
-
-# Transfer 5-8
-for i in {5..8}; do
+# Mensagens de sucesso (10)
+echo -e "${GREEN}Publishing 10 SUCCESS transfers...${NC}"
+for i in {1..10}; do
+  AMOUNT=$((i * 50))
   TRANSFER=$(cat <<JSON
 {
-  "transferId":"tf-demo-batch-00$i",
+  "transferId":"tf-demo-success-$(printf "%02d" $i)",
   "sourceAccountId":"acc-123",
   "destinationAccountId":"acc-456",
-  "amount":$((i * 50)).00,
+  "amount":$AMOUNT.00,
   "currency":"BRL",
-  "requestedAt":"2026-08-28T20:$((i*5)):00Z"
+  "requestedAt":"2026-09-02T15:$((i*2)):00Z"
 }
 JSON
 )
-  
   echo "$TRANSFER" | docker-compose exec -T kafka kafka-console-producer \
     --broker-list localhost:9092 \
-    --topic transfer-requested
-  
-  echo -e "${GREEN}✅ Transfer $i publicada${NC}"
+    --topic transfer-requested 2>/dev/null
 done
-
+echo -e "${GREEN}✅ 10 success transfers published${NC}"
 echo ""
+
+# Mensagens de saldo insuficiente (8)
+echo -e "${YELLOW}Publishing 8 INSUFFICIENT_BALANCE transfers...${NC}"
+for i in {1..8}; do
+  AMOUNT=$((5000 + i * 1000))
+  TRANSFER=$(cat <<JSON
+{
+  "transferId":"tf-demo-insufficient-$(printf "%02d" $i)",
+  "sourceAccountId":"acc-123",
+  "destinationAccountId":"acc-456",
+  "amount":$AMOUNT.00,
+  "currency":"BRL",
+  "requestedAt":"2026-09-02T16:$((i*3)):00Z"
+}
+JSON
+)
+  echo "$TRANSFER" | docker-compose exec -T kafka kafka-console-producer \
+    --broker-list localhost:9092 \
+    --topic transfer-requested 2>/dev/null
+done
+echo -e "${YELLOW}✅ 8 insufficient balance transfers published${NC}"
+echo ""
+
+# Mensagens para conta inativa (7)
+echo -e "${YELLOW}Publishing 7 INACTIVE_ACCOUNT transfers...${NC}"
+for i in {1..7}; do
+  AMOUNT=$((i * 100))
+  TRANSFER=$(cat <<JSON
+{
+  "transferId":"tf-demo-inactive-$(printf "%02d" $i)",
+  "sourceAccountId":"acc-123",
+  "destinationAccountId":"acc-000",
+  "amount":$AMOUNT.00,
+  "currency":"BRL",
+  "requestedAt":"2026-09-02T17:$((i*4)):00Z"
+}
+JSON
+)
+  echo "$TRANSFER" | docker-compose exec -T kafka kafka-console-producer \
+    --broker-list localhost:9092 \
+    --topic transfer-requested 2>/dev/null
+done
+echo -e "${YELLOW}✅ 7 inactive account transfers published${NC}"
+echo ""
+
+# Mensagens com currency inválida (5)
+echo -e "${YELLOW}Publishing 5 INVALID_CURRENCY transfers...${NC}"
+for i in {1..5}; do
+  AMOUNT=$((i * 75))
+  CURRENCY=$(["USD", "EUR", "GBP", "JPY", "CAD"] | sed -n "$((i))p")
+  TRANSFER=$(cat <<JSON
+{
+  "transferId":"tf-demo-invalid-currency-$(printf "%02d" $i)",
+  "sourceAccountId":"acc-123",
+  "destinationAccountId":"acc-456",
+  "amount":$AMOUNT.00,
+  "currency":"USD",
+  "requestedAt":"2026-09-02T18:$((i*5)):00Z"
+}
+JSON
+)
+  echo "$TRANSFER" | docker-compose exec -T kafka kafka-console-producer \
+    --broker-list localhost:9092 \
+    --topic transfer-requested 2>/dev/null
+done
+echo -e "${YELLOW}✅ 5 invalid currency transfers published${NC}"
+echo ""
+
 echo -e "${BLUE}=========================================="
-echo "✅ DEMO: 8 Transfers publicadas no Kafka!"
+echo "✅ DEMO: 30 Transfers publicadas no Kafka!"
+echo "   - 10 SUCCESS (acc-123 → acc-456)"
+echo "   - 8 INSUFFICIENT_BALANCE"
+echo "   - 7 INACTIVE_ACCOUNT (acc-000)"
+echo "   - 5 INVALID_CURRENCY"
 echo "==========================================${NC}"
 echo ""

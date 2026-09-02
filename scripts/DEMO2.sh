@@ -1,10 +1,9 @@
 #!/bin/bash
 
 ##############################################################################
-# Bank Transfer API - Demo Script 2 (Bulk Publisher)
-# Publica 40 mensagens direto no tópico Kafka transfer-requested
-#
-# Uso: ./DEMO2.sh
+# Bank Transfer API - Demo Script 2 (Additional Transfers)
+# Publica 20 mensagens adicionais direto no tópico Kafka transfer-requested
+# Uso: ./DEMO2.sh (execute manualmente se quiser mais mensagens)
 ##############################################################################
 
 set -e
@@ -15,26 +14,25 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 echo -e "${BLUE}=========================================="
-echo "Bank Transfer API - Demo 2 (Bulk Kafka Publishing)"
+echo "Bank Transfer API - Demo 2 (20 Additional Transfers)"
 echo "==========================================${NC}"
 echo ""
-echo -e "${GREEN}Publishing 40 test transfers...${NC}"
+echo -e "${GREEN}Publishing 20 additional transfers...${NC}"
 echo ""
 
-# Publish 40 transfers
-for i in {1..40}; do
-  AMOUNT=$((RANDOM % 1000 + 10))
-  HOUR=$((i / 60))
-  MINUTE=$((i % 60))
+for i in {1..20}; do
+  AMOUNT=$((RANDOM % 2000 + 50))
+  SOURCE_ACC=$(["acc-123", "acc-456", "acc-789"] | sed -n "$((i % 3 + 1))p")
+  DEST_ACC=$(["acc-456", "acc-789", "acc-123"] | sed -n "$((i % 3 + 2))p")
   
   TRANSFER=$(cat <<JSON
 {
-  "transferId":"tf-demo-bulk-$(printf "%03d" $i)",
+  "transferId":"tf-demo-additional-$(printf "%02d" $i)",
   "sourceAccountId":"acc-123",
   "destinationAccountId":"acc-456",
   "amount":$AMOUNT.00,
   "currency":"BRL",
-  "requestedAt":"2026-08-28T21:$(printf "%02d" $HOUR):$(printf "%02d" $MINUTE)Z"
+  "requestedAt":"2026-09-02T19:$(printf "%02d" $((i / 20))):$(printf "%02d" $((i % 60)))Z"
 }
 JSON
 )
@@ -43,14 +41,13 @@ JSON
     --broker-list localhost:9092 \
     --topic transfer-requested 2>/dev/null
   
-  # Print progress
-  if [ $((i % 10)) -eq 0 ]; then
-    echo -e "${GREEN}✅ $i/40 transfers publicadas${NC}"
+  if [ $((i % 5)) -eq 0 ]; then
+    echo -e "${GREEN}✅ $i/20 additional transfers published${NC}"
   fi
 done
 
 echo ""
 echo -e "${BLUE}=========================================="
-echo "✅ DEMO2: 40 Bulk Transfers publicadas no Kafka!"
+echo "✅ DEMO2: 20 Additional Transfers publicadas no Kafka!"
 echo "==========================================${NC}"
 echo ""

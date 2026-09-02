@@ -26,7 +26,7 @@ error() {
 
 echo ""
 echo "=========================================="
-echo "  Bank Transfer API - Setup & Test"
+echo "  Bank Transfer API - Complete Setup"
 echo "=========================================="
 echo ""
 
@@ -61,24 +61,21 @@ for i in {1..10}; do
     sleep 2
 done
 
-# Step 4: Publish test messages
-info "STEP 5: Publishing test messages from DEMO.sh..."
-"$SCRIPTS_DIR/DEMO.sh"
-success "DEMO.sh messages published!"
+# Step 4: Initialize DynamoDB BEFORE publishing messages
+info "STEP 5: Creating and populating DynamoDB tables..."
+"$SCRIPTS_DIR/init-dynamodb.sh"
+success "DynamoDB tables created and populated!"
 
 sleep 2
 
-info "STEP 6: Publishing test messages from DEMO2.sh..."
-"$SCRIPTS_DIR/DEMO2.sh"
-success "DEMO2.sh messages published!"
-
-info "STEP 6: Populating DynamoDB with sample accounts..."
-"$SCRIPTS_DIR/init-dynamodb.sh"
-success "DynamoDB populated with 4 accounts!"
+# Step 5: Publish test messages
+info "STEP 6: Publishing 30 test messages to Kafka..."
+"$SCRIPTS_DIR/DEMO.sh"
+success "Test messages published!"
 
 echo ""
+
+# Step 6: Start App
 info "STEP 7: Starting Spring Boot application..."
-info "DynamoDB tables are ready, consumer will process Kafka messages..."
+info "Consumer will now process the 30 queued messages..."
 "$SCRIPTS_DIR/start-app.sh"
-
-
