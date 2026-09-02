@@ -2,7 +2,7 @@ package com.danilo.banktransfer.api.controller
 
 import com.danilo.banktransfer.domain.dto.AccountDTO
 import com.danilo.banktransfer.domain.model.Account
-import com.danilo.banktransfer.domain.model.AccountStatus
+import com.danilo.banktransfer.domain.enums.AccountStatus
 import com.danilo.banktransfer.domain.enums.Currency
 import com.danilo.banktransfer.infrastructure.repository.AccountRepository
 import org.springframework.http.HttpStatus
