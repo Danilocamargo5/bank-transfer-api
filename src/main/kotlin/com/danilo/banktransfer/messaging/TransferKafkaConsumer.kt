@@ -122,9 +122,6 @@ class TransferKafkaConsumer(
         }
     }
 
-    /**
-     * Publish transfer failed event to SQS
-     */
     private fun publishTransferFailed(event: com.danilo.banktransfer.domain.model.TransferFailedEvent) {
         try {
             sqsPublisher.publishTransferFailed(event)
