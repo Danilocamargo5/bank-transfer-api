@@ -3,6 +3,7 @@ plugins {
 	kotlin("plugin.spring") version "2.0.0"
 	id("org.springframework.boot") version "3.3.5"
 	id("io.spring.dependency-management") version "1.1.6"
+	jacoco
 }
 
 group = "com.danilo"
@@ -66,4 +67,48 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
 
 tasks.withType<Test> {
 	useJUnitPlatform()
+	
+	// Generate JaCoCo coverage report
+	finalizedBy("jacocoTestReport")
+}
+
+// JaCoCo configuration
+jacoco {
+	toolVersion = "0.8.10"
+}
+
+tasks.jacocoTestReport {
+	dependsOn(tasks.test)
+	
+	reports {
+		xml.required.set(true)
+		html.required.set(true)
+		csv.required.set(false)
+	}
+	
+	// Exclude certain classes/packages from coverage
+	afterEvaluate {
+		classDirectories.setFrom(files(classDirectories.files.map {
+			fileTree(it) {
+				exclude(
+					"**/config/**",
+					"**/model/**",
+					"**/enums/**"
+				)
+			}
+		}))
+	}
+}
+
+// Print coverage summary
+tasks.register("coverageSummary") {
+	dependsOn("jacocoTestReport")
+	doLast {
+		println("\n" + "=".repeat(80))
+		println("📊 CODE COVERAGE REPORT")
+		println("=".repeat(80))
+		println("HTML Report: build/reports/jacoco/test/html/index.html")
+		println("Open in browser to see detailed coverage breakdown")
+		println("=".repeat(80))
+	}
 }
