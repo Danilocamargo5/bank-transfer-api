@@ -17,8 +17,6 @@ import com.danilo.banktransfer.infrastructure.repository.TransferRepository
 import com.danilo.banktransfer.infrastructure.metrics.TransferMetrics
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
-import software.amazon.awssdk.services.dynamodb.model.TransactionCanceledException
-import software.amazon.awssdk.services.dynamodb.model.ValidationException
 import java.time.Instant
 
 @Service
@@ -203,22 +201,15 @@ class TransferService(
                 
                 logger.info("Successfully saved accounts atomically for transfer $transferId on attempt $attempt")
                 return  // Success, exit
-            } catch (e: ValidationException) {
-                // Validation error = permanent error, don't retry
-                logger.error("Validation error for transfer $transferId (cannot retry): ${e.message}")
-                throw InvalidTransferException("Validation error: ${e.message}", ErrorType.INVALID_TRANSFER_ID, e)
-            } catch (e: TransactionCanceledException) {
-                // Transaction was canceled (e.g., DynamoDB condition failed)
-                logger.error("Transaction canceled for transfer $transferId: ${e.message}")
-                throw InvalidTransferException("Transaction was canceled: ${e.message}", ErrorType.INVALID_TRANSFER_ID, e)
             } catch (e: Exception) {
-                // Transient error (network, timeout, throttling) - retry
+                // Any error during atomic save - will retry or fail after MAX_RETRIES attempts
+                // DynamoDB transactional guarantee ensures BOTH save or BOTH fail (no partial updates)
                 lastException = e
                 logger.warn("Attempt $attempt failed to save accounts atomically for transfer $transferId: ${e.message}")
                 
                 if (attempt < MAX_RETRIES) {
                     val delayMs = INITIAL_BACKOFF_MS * (1L shl (attempt - 1))  // Exponential: 100, 200, 400
-                    logger.info("Transient error detected. Waiting ${delayMs}ms before retry...")
+                    logger.info("Error detected. Waiting ${delayMs}ms before retry (attempt $attempt/$MAX_RETRIES)...")
                     Thread.sleep(delayMs)
                 } else {
                     logger.error("All $MAX_RETRIES attempts failed for transfer $transferId")
