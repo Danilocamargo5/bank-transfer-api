@@ -310,7 +310,12 @@ class TransferService(
         try {
             Currency.valueOf(event.currency)
         } catch (e: IllegalArgumentException) {
-            throw InvalidTransferException("Invalid currency: ${event.currency}")
+            throw InvalidTransferException("Invalid currency: ${event.currency}. Only BRL is supported.")
+        }
+        
+        // Only BRL is supported
+        if (event.currency != "BRL") {
+            throw InvalidTransferException("Only BRL currency is supported, received: ${event.currency}")
         }
 
         // Validate accounts are different
