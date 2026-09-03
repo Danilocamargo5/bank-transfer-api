@@ -166,7 +166,7 @@ class TransferServiceTest {
         // First call fails (transient error), second succeeds
         every { accountRepository.saveAtomically(any(), any()) } 
             .throws(RuntimeException("Network timeout"))
-            .andThen { just(Unit)() }
+            .andThen { Unit }
         
         every { transferRepository.save(any()) } returns mockk()
         every { transferMetrics.recordTransferProcessingTime(any()) } just runs
