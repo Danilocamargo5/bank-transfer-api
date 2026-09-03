@@ -67,6 +67,7 @@ class TransferKafkaConsumerTest {
         every { kafkaTemplate.send(any(), any(), any()) } returns mockk(relaxed = true) {
             every { get() } returns sendFuture  // .get() blocks and returns result
         }
+        every { deadLetterService.sendKafkaFailureToDLQ(any(), any(), any(), any(), any()) } just runs
         every { acknowledgment.acknowledge() } just runs
         
         // When
@@ -99,6 +100,7 @@ class TransferKafkaConsumerTest {
         
         every { transferService.processTransfer(any()) } returns TransferService.Result.Failure(failureEvent)
         every { sqsPublisher.publishTransferFailed(any()) } just runs
+        every { deadLetterService.sendKafkaFailureToDLQ(any(), any(), any(), any(), any()) } just runs
         every { acknowledgment.acknowledge() } just runs
         
         // When
@@ -158,6 +160,7 @@ class TransferKafkaConsumerTest {
         
         every { transferService.processTransfer(any()) } returns TransferService.Result.Failure(failureEvent)
         every { sqsPublisher.publishTransferFailed(any()) } throws RuntimeException("SQS connection failed")
+        every { deadLetterService.sendKafkaFailureToDLQ(any(), any(), any(), any(), any()) } just runs
         every { acknowledgment.acknowledge() } just runs
         
         // When & Then - expect exception
@@ -193,6 +196,7 @@ class TransferKafkaConsumerTest {
         every { kafkaTemplate.send(any(), any(), any()) } returns mockk(relaxed = true) {
             every { get() } throws RuntimeException("Kafka broker unavailable")  // .get() throws
         }
+        every { deadLetterService.sendKafkaFailureToDLQ(any(), any(), any(), any(), any()) } just runs
         every { acknowledgment.acknowledge() } just runs
         
         // When & Then - expect exception
