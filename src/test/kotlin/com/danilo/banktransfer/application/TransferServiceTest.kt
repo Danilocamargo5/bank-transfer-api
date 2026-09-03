@@ -12,6 +12,7 @@ import com.danilo.banktransfer.domain.enums.TransferStatus
 import com.danilo.banktransfer.infrastructure.repository.AccountRepository
 import com.danilo.banktransfer.infrastructure.repository.TransferRepository
 import com.danilo.banktransfer.infrastructure.metrics.TransferMetrics
+import com.danilo.banktransfer.infrastructure.service.DeadLetterService
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
@@ -31,6 +32,7 @@ class TransferServiceTest {
     private lateinit var accountRepository: AccountRepository
     private lateinit var transferRepository: TransferRepository
     private lateinit var transferMetrics: TransferMetrics
+    private lateinit var deadLetterService: DeadLetterService
     private lateinit var transferService: TransferService
     
     private val sourceAccount = Account(
@@ -65,7 +67,8 @@ class TransferServiceTest {
         accountRepository = mockk()
         transferRepository = mockk()
         transferMetrics = mockk()
-        transferService = TransferService(accountRepository, transferRepository, transferMetrics)
+        deadLetterService = mockk()
+        transferService = TransferService(accountRepository, transferRepository, transferMetrics, deadLetterService)
     }
     
     @Test
