@@ -84,11 +84,23 @@ class TransferService(
 
             logger.info("Debit/credit complete for ${event.transferId}. New balances: source=${updatedSourceAccount.balance}, dest=${updatedDestinationAccount.balance}")
 
-            // 7. Save updated accounts
-            accountRepository.save(updatedSourceAccount)
-            accountRepository.save(updatedDestinationAccount)
-
-            logger.info("Accounts saved for ${event.transferId}")
+            // 7. Save updated accounts WITH ATOMIC GUARANTEE
+            try {
+                accountRepository.save(updatedSourceAccount)
+                accountRepository.save(updatedDestinationAccount)
+                logger.info("Accounts saved for ${event.transferId}")
+            } catch (e: Exception) {
+                // ROLLBACK: Restore original balances if save fails
+                logger.error("Failed to save accounts for ${event.transferId}, executing ROLLBACK: ${e.message}")
+                try {
+                    accountRepository.save(sourceAccount)  // Restore original
+                    accountRepository.save(destinationAccount)  // Restore original
+                    logger.info("ROLLBACK completed for ${event.transferId}")
+                } catch (rollbackError: Exception) {
+                    logger.error("CRITICAL: ROLLBACK FAILED for ${event.transferId}! Manual intervention needed: ${rollbackError.message}", rollbackError)
+                }
+                throw e  // Propagate original error to catch block below
+            }
 
             // 8. Create and save transfer record as COMPLETED
             val transfer = Transfer(
