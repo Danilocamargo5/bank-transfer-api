@@ -13,25 +13,23 @@ import io.mockk.just
 import io.mockk.mockk
 import io.mockk.runs
 import io.mockk.verify
-import io.mockk.slot
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.BeforeEach
 import java.math.BigDecimal
 import java.time.Instant
 import java.util.*
 import kotlin.test.assertTrue
-import kotlin.test.assertEquals
 
 /**
- * Testes para demonstrar atomicidade 100% garantida
- * Cenário: Débito + Crédito em UMA transação
+ * Comprehensive atomicity guarantee tests for DynamoDB transactWriteItems
  * 
- * Hipótese: Se qualquer parte falhar, NENHUMA é salva
+ * Scenario: Debit + Credit in ONE atomic transaction
+ * Hypothesis: If any part fails, NEITHER is saved
  * 
- * NUNCA pode acontecer:
- * ❌ Débito salvo + Crédito não
- * ❌ Crédito salvo + Débito não
- * ❌ Estado intermediário inconsistente
+ * NEVER can happen:
+ * ❌ Debit saved + Credit not
+ * ❌ Credit saved + Debit not
+ * ❌ Intermediate inconsistent state
  */
 class AtomicityGuaranteeTest {
     
@@ -78,25 +76,20 @@ class AtomicityGuaranteeTest {
     }
     
     /**
-     * TEST 1: Sucesso Total
+     * Scenario: Both operations (debit and credit) complete successfully
      * 
-     * Cenário: Ambas as operações (débito e crédito) completam com sucesso
-     * 
-     * ✅ Esperado: 
-     *    - João: 5000 → 4000 (débito de 1000)
-     *    - Maria: 1000 → 2000 (crédito de 1000)
-     *    - Transação registrada como SUCESSO
+     * Expected: 
+     *    - João: 5000 → 4000 (debit 1000)
+     *    - Maria: 1000 → 2000 (credit 1000)
+     *    - Transaction recorded as SUCCESS
      */
     @Test
-    fun `TEST 1 - Sucesso Total - Ambas Operacoes Completam`() {
+    fun `should complete transfer successfully when both debit and credit succeed`() {
         // Given
         every { transferRepository.hasCompletedTransfer(transferEvent.transferId) } returns false
         every { accountRepository.findById("acc-João-001") } returns Optional.of(sourceAccount)
         every { accountRepository.findById("acc-Maria-002") } returns Optional.of(destinationAccount)
-        
-        // Mock saveAtomically to do nothing (success)
         every { accountRepository.saveAtomically(any(), any()) } just runs
-        
         every { transferRepository.save(any()) } returns mockk()
         every { transferMetrics.recordTransferProcessingTime(any()) } just runs
         every { transferMetrics.recordTransferSuccess() } just runs
@@ -106,42 +99,30 @@ class AtomicityGuaranteeTest {
         
         // Then
         assertTrue(result is TransferService.Result.Success)
-        
-        // Verificar que saveAtomically foi chamado UMA VEZ com DOIS itens
         verify(exactly = 1) { accountRepository.saveAtomically(any(), any()) }
-        
-        println("✅ TEST 1 PASSOU: Débito e Crédito completaram juntos")
-        println("   João: 5000 → 4000")
-        println("   Maria: 1000 → 2000")
     }
     
     /**
-     * TEST 2: Falha de Crédito → Nenhuma Operação Salva
+     * Scenario: Transaction fails at credit stage (second operation)
      * 
-     * Cenário: Transação falha na etapa de crédito (segunda operação)
+     * WRONG (quasi-ACID manual):
+     *    - João: 5000 → 4000 (debit saved)
+     *    - Maria: 1000 → 1000 (credit failed)
+     *    - INCONSISTENCY! 💥
      * 
-     * ❌ Hipótese INCORRETA (quasi-ACID manual):
-     *    - João: 5000 → 4000 (débito salvou)
-     *    - Maria: 1000 → 1000 (crédito falhou, não salvou)
-     *    - INCONSISTÊNCIA! 💥
-     * 
-     * ✅ Comportamento CORRETO (seu código com TransactWriteItems):
-     *    - João: 5000 → 5000 (rollback automático)
-     *    - Maria: 1000 → 1000 (nunca foi alterada)
-     *    - Estado consistente! ✅
+     * CORRECT (your code with TransactWriteItems):
+     *    - João: 5000 → 5000 (rollback automatic)
+     *    - Maria: 1000 → 1000 (never altered)
+     *    - STATE CONSISTENT! ✅
      */
     @Test
-    fun `TEST 2 - Falha no Credito - NENHUMA Operacao Salva (Atomicidade!)`() {
+    fun `should not update any account when credit operation fails due to atomicity`() {
         // Given
         every { transferRepository.hasCompletedTransfer(transferEvent.transferId) } returns false
         every { accountRepository.findById("acc-João-001") } returns Optional.of(sourceAccount)
         every { accountRepository.findById("acc-Maria-002") } returns Optional.of(destinationAccount)
-        
-        // Simular falha na transação atômica
-        // (DynamoDB recusaria a transação inteira, não salvaria nada)
         every { accountRepository.saveAtomically(any(), any()) } 
-            .throws(RuntimeException("DynamoDB: Transação falhou no crédito"))
-        
+            .throws(RuntimeException("DynamoDB: Transaction failed on credit"))
         every { transferRepository.save(any()) } returns mockk()
         every { transferMetrics.recordTransferProcessingTime(any()) } just runs
         every { transferMetrics.recordTransferFailure(any()) } just runs
@@ -149,44 +130,32 @@ class AtomicityGuaranteeTest {
         // When
         val result = transferService.processTransfer(transferEvent)
         
-        // Then - A transação falhou
+        // Then - Transaction failed
         assertTrue(result is TransferService.Result.Failure)
-        
-        // Verificação CRÍTICA: saveAtomically foi chamado 3 vezes (MAX_RETRIES)
         verify(exactly = 3) { accountRepository.saveAtomically(any(), any()) }
-        
-        println("✅ TEST 2 PASSOU: Falha de crédito → Nenhuma operação salva")
-        println("   ✅ João MANTÉM R$ 5000 (débito foi REVERTIDO)")
-        println("   ✅ Maria MANTÉM R$ 1000 (crédito NUNCA foi salvo)")
-        println("   Estado CONSISTENTE apesar da falha!")
     }
     
     /**
-     * TEST 3: Falha de Débito → Nenhuma Operação Salva
+     * Scenario: Transaction fails at debit stage (first operation)
      * 
-     * Cenário: Transação falha na etapa de débito (primeira operação)
+     * WRONG (quasi-ACID manual):
+     *    - João: 5000 → 5000 (debit failed)
+     *    - Maria: 1000 → 2000 (credit saved!)
+     *    - INCONSISTENCY! 💥
      * 
-     * ❌ Hipótese INCORRETA (quasi-ACID manual):
-     *    - João: 5000 → 5000 (débito falhou, não salvou)
-     *    - Maria: 1000 → 2000 (crédito salvou!)
-     *    - INCONSISTÊNCIA! 💥
-     * 
-     * ✅ Comportamento CORRETO (seu código):
-     *    - João: 5000 → 5000 (débito nunca foi alterado)
-     *    - Maria: 1000 → 1000 (crédito foi REVERTIDO)
-     *    - Estado consistente! ✅
+     * CORRECT (your code):
+     *    - João: 5000 → 5000 (debit never altered)
+     *    - Maria: 1000 → 1000 (credit was ROLLED BACK)
+     *    - STATE CONSISTENT! ✅
      */
     @Test
-    fun `TEST 3 - Falha no Debito - NENHUMA Operacao Salva (Atomicidade!)`() {
+    fun `should not update any account when debit operation fails due to atomicity`() {
         // Given
         every { transferRepository.hasCompletedTransfer(transferEvent.transferId) } returns false
         every { accountRepository.findById("acc-João-001") } returns Optional.of(sourceAccount)
         every { accountRepository.findById("acc-Maria-002") } returns Optional.of(destinationAccount)
-        
-        // Simular falha na transação (débito falha)
         every { accountRepository.saveAtomically(any(), any()) } 
-            .throws(RuntimeException("DynamoDB: Falha ao atualizar débito - validação de saldo"))
-        
+            .throws(RuntimeException("DynamoDB: Debit validation failed"))
         every { transferRepository.save(any()) } returns mockk()
         every { transferMetrics.recordTransferProcessingTime(any()) } just runs
         every { transferMetrics.recordTransferFailure(any()) } just runs
@@ -196,39 +165,29 @@ class AtomicityGuaranteeTest {
         
         // Then
         assertTrue(result is TransferService.Result.Failure)
-        
-        // Verificação CRÍTICA: saveAtomically foi chamado 3 vezes (MAX_RETRIES)
         verify(exactly = 3) { accountRepository.saveAtomically(any(), any()) }
-        
-        println("✅ TEST 3 PASSOU: Falha de débito → Nenhuma operação salva")
-        println("   ✅ João MANTÉM R$ 5000 (débito NUNCA foi alterado)")
-        println("   ✅ Maria MANTÉM R$ 1000 (crédito foi REVERTIDO)")
-        println("   Estado CONSISTENTE apesar da falha!")
     }
     
     /**
-     * TEST 4: Retry e Sucesso na 2ª Tentativa
+     * Scenario: First attempt fails (transient error: network down)
+     *          Second attempt succeeds
      * 
-     * Cenário: Primeira tentativa falha (erro transiente: rede caiu)
-     *          Segunda tentativa sucede
-     * 
-     * ✅ Esperado:
-     *    - João: 5000 → 4000 (débito completou na retry)
-     *    - Maria: 1000 → 2000 (crédito completou na retry)
-     *    - Transação registrada como SUCESSO
-     *    - saveAtomically chamado 2 vezes (1 falha + 1 sucesso)
+     * Expected:
+     *    - João: 5000 → 4000 (debit completed on retry)
+     *    - Maria: 1000 → 2000 (credit completed on retry)
+     *    - Transaction recorded as SUCCESS
+     *    - saveAtomically called 2 times (1 fail + 1 success)
      */
     @Test
-    fun `TEST 4 - Retry Transiente e Sucesso na Segunda Tentativa`() {
+    fun `should retry on transient error and succeed on second attempt`() {
         // Given
         every { transferRepository.hasCompletedTransfer(transferEvent.transferId) } returns false
         every { accountRepository.findById("acc-João-001") } returns Optional.of(sourceAccount)
         every { accountRepository.findById("acc-Maria-002") } returns Optional.of(destinationAccount)
         
-        // Primeira chamada falha (transiente), segunda sucede
         every { accountRepository.saveAtomically(any(), any()) } 
             .throws(RuntimeException("Network timeout - transient"))
-            .andThen { } // Segunda chamada sucede
+            .andThen { Unit }
         
         every { transferRepository.save(any()) } returns mockk()
         every { transferMetrics.recordTransferProcessingTime(any()) } just runs
@@ -237,41 +196,28 @@ class AtomicityGuaranteeTest {
         // When
         val result = transferService.processTransfer(transferEvent)
         
-        // Then - Sucesso apesar do retry necessário
+        // Then - Success despite retry necessary
         assertTrue(result is TransferService.Result.Success)
-        
-        // Verificação: saveAtomically foi chamado 2 vezes (1 falha + 1 sucesso)
         verify(exactly = 2) { accountRepository.saveAtomically(any(), any()) }
-        
-        println("✅ TEST 4 PASSOU: Retry transiente → Sucesso na 2ª tentativa")
-        println("   Tentativa 1: ❌ Falha (network timeout)")
-        println("   Tentativa 2: ✅ Sucesso (após 100ms de espera)")
-        println("   João: 5000 → 4000")
-        println("   Maria: 1000 → 2000")
     }
     
     /**
-     * TEST 5: Falha Permanente após Todas as Retries
+     * Scenario: Transaction fails 3 times in a row (permanent error)
      * 
-     * Cenário: Transação falha 3 vezes seguidas (erro permanente)
-     * 
-     * ✅ Esperado:
-     *    - João: 5000 → 5000 (nenhuma alteração)
-     *    - Maria: 1000 → 1000 (nenhuma alteração)
-     *    - Transação registrada como FAILURE
-     *    - saveAtomically chamado 3 vezes (MAX_RETRIES)
+     * Expected:
+     *    - João: 5000 → 5000 (no change)
+     *    - Maria: 1000 → 1000 (no change)
+     *    - Transaction recorded as FAILURE
+     *    - saveAtomically called 3 times (MAX_RETRIES)
      */
     @Test
-    fun `TEST 5 - Falha Permanente - Todas as Retries Usadas - Estado Consistente`() {
+    fun `should fail and maintain consistency after all retries exhausted`() {
         // Given
         every { transferRepository.hasCompletedTransfer(transferEvent.transferId) } returns false
         every { accountRepository.findById("acc-João-001") } returns Optional.of(sourceAccount)
         every { accountRepository.findById("acc-Maria-002") } returns Optional.of(destinationAccount)
-        
-        // Todas as tentativas falham com erro permanente
         every { accountRepository.saveAtomically(any(), any()) } 
             .throws(RuntimeException("DynamoDB: Account validation failed"))
-        
         every { transferRepository.save(any()) } returns mockk()
         every { transferMetrics.recordTransferProcessingTime(any()) } just runs
         every { transferMetrics.recordTransferFailure(any()) } just runs
@@ -281,82 +227,70 @@ class AtomicityGuaranteeTest {
         
         // Then
         assertTrue(result is TransferService.Result.Failure)
-        
-        // Verificação CRÍTICA: saveAtomically foi chamado 3 vezes (MAX_RETRIES)
         verify(exactly = 3) { accountRepository.saveAtomically(any(), any()) }
-        
-        println("✅ TEST 5 PASSOU: Falha permanente após 3 retries")
-        println("   Tentativa 1: ❌ Falha permanente")
-        println("   Tentativa 2: ❌ Falha permanente (espera 100ms)")
-        println("   Tentativa 3: ❌ Falha permanente (espera 200ms)")
-        println("   ✅ João MANTÉM R$ 5000")
-        println("   ✅ Maria MANTÉM R$ 1000")
-        println("   Estado CONSISTENTE - nenhuma operação foi salva")
     }
     
     /**
-     * TEST 6: Contêiner Mental - Provando Impossibilidade de Falha Parcial
+     * Prove mathematically that partial failure is IMPOSSIBLE
      * 
-     * Cenário: Demonstrar que NUNCA é possível ter débito sem crédito
+     * For each combination of transaction results:
+     * - Success + Success: ✅ BOTH save
+     * - Success + Fail: ❌ BOTH rollback (rollback automatic)
+     * - Fail + Success: ❌ BOTH rollback (rollback automatic)
+     * - Fail + Fail: ❌ BOTH rollback
      * 
-     * Para cada combinação de resultados da transação:
-     * - Sucesso (+Sucesso): ✅ AMBAS salvam
-     * - Falha + Sucesso: ❌ NENHUMA salva (rollback automático)
-     * - Sucesso + Falha: ❌ NENHUMA salva (rollback automático)
-     * - Falha + Falha: ❌ NENHUMA salva
-     * 
-     * Não existe: Sucesso + Falha = FALHA PARCIAL
+     * There is no: Success + Fail = PARTIAL FAILURE
      */
     @Test
-    fun `TEST 6 - Matriz de Atomicidade - Provando Impossibilidade de Falha Parcial`() {
+    fun `should prove mathematically that partial failure is impossible with transactional guarantee`() {
         println("\n" + "=".repeat(80))
-        println("TEST 6: MATRIZ DE ATOMICIDADE - Provando Transação Atômica")
+        println("ATOMICITY MATRIX: Proving Transactional Guarantee")
         println("=".repeat(80))
         
-        data class ScenarioResult(
+        data class Scenario(
             val debitState: String,
             val creditState: String,
             val expectedResult: String
         )
         
         val scenarios = listOf(
-            ScenarioResult(
-                debitState = "Sucesso (acc-João: 5000→4000)",
-                creditState = "Sucesso (acc-Maria: 1000→2000)",
-                expectedResult = "✅ AMBAS SALVAM - Transação completa"
+            Scenario(
+                debitState = "Success (acc-João: 5000→4000)",
+                creditState = "Success (acc-Maria: 1000→2000)",
+                expectedResult = "✅ BOTH SAVE - Transaction complete"
             ),
-            ScenarioResult(
-                debitState = "Sucesso (acc-João: 5000→4000)",
-                creditState = "Falha (err: validation)",
-                expectedResult = "✅ AMBAS REVERTIDAS - Rollback automático"
+            Scenario(
+                debitState = "Success (acc-João: 5000→4000)",
+                creditState = "Fail (err: validation)",
+                expectedResult = "✅ BOTH ROLLBACK - Automatic rollback"
             ),
-            ScenarioResult(
-                debitState = "Falha (err: insufficient)",
-                creditState = "Sucesso (acc-Maria: 1000→2000)",
-                expectedResult = "✅ AMBAS REVERTIDAS - Rollback automático"
+            Scenario(
+                debitState = "Fail (err: insufficient)",
+                creditState = "Success (acc-Maria: 1000→2000)",
+                expectedResult = "✅ BOTH ROLLBACK - Automatic rollback"
             ),
-            ScenarioResult(
-                debitState = "Falha (err: timeout)",
-                creditState = "Falha (err: network)",
-                expectedResult = "✅ AMBAS REVERTIDAS - Transação abortada"
+            Scenario(
+                debitState = "Fail (err: timeout)",
+                creditState = "Fail (err: network)",
+                expectedResult = "✅ BOTH ROLLBACK - Transaction aborted"
             )
         )
         
-        println("\nCenários Possíveis com TransactWriteItems:")
+        println("\nPossible Scenarios with TransactWriteItems:")
         println("-".repeat(80))
         
         scenarios.forEachIndexed { idx, scenario ->
-            println("\nCenário ${idx + 1}:")
-            println("  Débito:    ${scenario.debitState}")
-            println("  Crédito:   ${scenario.creditState}")
-            println("  Resultado: ${scenario.expectedResult}")
+            println("\nScenario ${idx + 1}:")
+            println("  Debit:    ${scenario.debitState}")
+            println("  Credit:   ${scenario.creditState}")
+            println("  Result:   ${scenario.expectedResult}")
         }
         
         println("\n" + "-".repeat(80))
-        println("✅ CONCLUSÃO: Nenhum cenário resulta em falha parcial!")
-        println("   → É IMPOSSÍVEL ter débito sem crédito")
-        println("   → É IMPOSSÍVEL ter crédito sem débito")
-        println("   → Atomicidade 100% GARANTIDA pelo DynamoDB")
+        println("✅ CONCLUSION: No scenario results in partial failure!")
+        println("   → IMPOSSIBLE to have debit without credit")
+        println("   → IMPOSSIBLE to have credit without debit")
+        println("   → Atomicity 100% GUARANTEED by DynamoDB")
         println("=".repeat(80) + "\n")
     }
 }
