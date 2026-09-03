@@ -118,7 +118,6 @@ class TransferKafkaConsumer(
             logger.error("Failed to publish transfer completed event: ${e.message}", e)
             // Even if Kafka send fails, we already acknowledged the incoming message
             // This means the transfer is committed to DB but completion event failed to publish
-            // TODO: Add retry logic or DLQ for missed completion events
             throw e
         }
     }
@@ -134,7 +133,6 @@ class TransferKafkaConsumer(
             logger.error("Failed to publish transfer failed event to SQS: ${e.message}", e)
             // Even if SQS send fails, we already acknowledged the incoming message
             // This means the transfer is committed to DB but failure event failed to publish
-            // TODO: Add retry logic or DLQ for missed failure events
             throw e
         }
     }
