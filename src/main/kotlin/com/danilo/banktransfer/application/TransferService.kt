@@ -25,6 +25,11 @@ class TransferService(
     private val transferMetrics: TransferMetrics
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
+    
+    companion object {
+        private const val MAX_RETRIES = 3
+        private const val INITIAL_BACKOFF_MS = 100L
+    }
 
     fun processTransfer(event: TransferRequestedEvent): Result {
         val startTime = System.currentTimeMillis()
@@ -84,23 +89,16 @@ class TransferService(
 
             logger.info("Debit/credit complete for ${event.transferId}. New balances: source=${updatedSourceAccount.balance}, dest=${updatedDestinationAccount.balance}")
 
-            // 7. Save updated accounts WITH ATOMIC GUARANTEE
-            try {
-                accountRepository.save(updatedSourceAccount)
-                accountRepository.save(updatedDestinationAccount)
-                logger.info("Accounts saved for ${event.transferId}")
-            } catch (e: Exception) {
-                // ROLLBACK: Restore original balances if save fails
-                logger.error("Failed to save accounts for ${event.transferId}, executing ROLLBACK: ${e.message}")
-                try {
-                    accountRepository.save(sourceAccount)  // Restore original
-                    accountRepository.save(destinationAccount)  // Restore original
-                    logger.info("ROLLBACK completed for ${event.transferId}")
-                } catch (rollbackError: Exception) {
-                    logger.error("CRITICAL: ROLLBACK FAILED for ${event.transferId}! Manual intervention needed: ${rollbackError.message}", rollbackError)
-                }
-                throw e  // Propagate original error to catch block below
-            }
+            // 7. Save updated accounts WITH ATOMIC GUARANTEE AND RETRY
+            saveAccountsWithRetryAndRollback(
+                updatedSourceAccount = updatedSourceAccount,
+                updatedDestinationAccount = updatedDestinationAccount,
+                originalSourceAccount = sourceAccount,
+                originalDestinationAccount = destinationAccount,
+                transferId = event.transferId
+            )
+
+            logger.info("Accounts saved for ${event.transferId}")
 
             // 8. Create and save transfer record as COMPLETED
             val transfer = Transfer(
@@ -178,6 +176,108 @@ class TransferService(
         }
     }
 
+    /**
+     * Save accounts with retry and rollback mechanism
+     * Ensures atomicity: both save or both rollback to original state
+     */
+    private fun saveAccountsWithRetryAndRollback(
+        updatedSourceAccount: com.danilo.banktransfer.domain.model.Account,
+        updatedDestinationAccount: com.danilo.banktransfer.domain.model.Account,
+        originalSourceAccount: com.danilo.banktransfer.domain.model.Account,
+        originalDestinationAccount: com.danilo.banktransfer.domain.model.Account,
+        transferId: String
+    ) {
+        var lastException: Exception? = null
+
+        // Try to save with retries
+        for (attempt in 1..MAX_RETRIES) {
+            try {
+                logger.info("Attempt $attempt to save accounts for transfer $transferId")
+                
+                accountRepository.save(updatedSourceAccount)
+                accountRepository.save(updatedDestinationAccount)
+                
+                logger.info("Successfully saved accounts for transfer $transferId on attempt $attempt")
+                return  // Success, exit
+            } catch (e: Exception) {
+                lastException = e
+                logger.warn("Attempt $attempt failed to save accounts for transfer $transferId: ${e.message}")
+                
+                if (attempt < MAX_RETRIES) {
+                    val delayMs = INITIAL_BACKOFF_MS * (1L shl (attempt - 1))  // Exponential: 100, 200, 400
+                    logger.info("Waiting ${delayMs}ms before retry...")
+                    Thread.sleep(delayMs)
+                }
+            }
+        }
+
+        // All retries failed, execute rollback
+        logger.error("All $MAX_RETRIES attempts failed for transfer $transferId. Executing ROLLBACK...")
+        executeRollback(
+            sourceAccount = originalSourceAccount,
+            destinationAccount = originalDestinationAccount,
+            transferId = transferId,
+            originalFailure = lastException
+        )
+
+        // If we reach here, rollback failed critically
+        throw IllegalStateException(
+            "CRITICAL: Failed to save accounts AND rollback failed for transfer $transferId. " +
+            "Original error: ${lastException?.message}. Manual intervention required!",
+            lastException
+        )
+    }
+
+    /**
+     * Execute rollback with retry mechanism
+     * If rollback also fails, throw exception (system is in inconsistent state)
+     */
+    private fun executeRollback(
+        sourceAccount: com.danilo.banktransfer.domain.model.Account,
+        destinationAccount: com.danilo.banktransfer.domain.model.Account,
+        transferId: String,
+        originalFailure: Exception?
+    ) {
+        var lastRollbackError: Exception? = null
+
+        for (attempt in 1..MAX_RETRIES) {
+            try {
+                logger.error("Rollback attempt $attempt for transfer $transferId")
+                
+                // Restore original balances
+                accountRepository.save(sourceAccount)
+                accountRepository.save(destinationAccount)
+                
+                logger.error("ROLLBACK SUCCESS for transfer $transferId on attempt $attempt. State restored to original.")
+                return  // Rollback succeeded
+            } catch (e: Exception) {
+                lastRollbackError = e
+                logger.error("Rollback attempt $attempt FAILED for transfer $transferId: ${e.message}", e)
+                
+                if (attempt < MAX_RETRIES) {
+                    val delayMs = INITIAL_BACKOFF_MS * (1L shl (attempt - 1))
+                    logger.error("Waiting ${delayMs}ms before retry...")
+                    Thread.sleep(delayMs)
+                }
+            }
+        }
+
+        // Critical error: Neither save nor rollback worked
+        logger.error(
+            "CRITICAL FAILURE for transfer $transferId: " +
+            "Failed to save accounts (${originalFailure?.message}) AND " +
+            "failed to rollback (${lastRollbackError?.message}). " +
+            "System is in INCONSISTENT STATE. MANUAL INTERVENTION REQUIRED!",
+            lastRollbackError
+        )
+
+        throw IllegalStateException(
+            "CRITICAL: Rollback failed for transfer $transferId after $MAX_RETRIES attempts. " +
+            "System may be in inconsistent state. Manual DBA intervention required.",
+            lastRollbackError
+        )
+    }
+
     private fun validateTransfer(event: TransferRequestedEvent) {
         // Validate amounts
         if (event.amount <= java.math.BigDecimal.ZERO) {
@@ -202,3 +302,4 @@ class TransferService(
         data class Failure(val event: TransferFailedEvent) : Result()
     }
 }
+
