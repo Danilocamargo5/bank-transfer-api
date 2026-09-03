@@ -22,7 +22,8 @@ import java.time.Instant
 class TransferService(
     private val accountRepository: AccountRepository,
     private val transferRepository: TransferRepository,
-    private val transferMetrics: TransferMetrics
+    private val transferMetrics: TransferMetrics,
+    private val deadLetterService: com.danilo.banktransfer.infrastructure.service.DeadLetterService
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
     
@@ -271,9 +272,30 @@ class TransferService(
             lastRollbackError
         )
 
+        // Send to DLQ for manual intervention
+        try {
+            deadLetterService.sendCriticalFailureToDLQ(
+                transferId = transferId,
+                sourceAccountId = sourceAccount.accountId,
+                destinationAccountId = destinationAccount.accountId,
+                amount = sourceAccount.balance.toString(),
+                currency = sourceAccount.currency.name,
+                failureReason = "CRITICAL: Both save and rollback failed. " +
+                    "Original error: ${originalFailure?.message}. " +
+                    "Rollback error: ${lastRollbackError?.message}",
+                severity = "CRITICAL_DATA_INCONSISTENCY"
+            )
+        } catch (dlqError: Exception) {
+            logger.error(
+                "CATASTROPHIC: Could not send critical failure to DLQ! " +
+                "Transfer $transferId status is UNKNOWN. Manual intervention REQUIRED IMMEDIATELY!",
+                dlqError
+            )
+        }
+
         throw IllegalStateException(
             "CRITICAL: Rollback failed for transfer $transferId after $MAX_RETRIES attempts. " +
-            "System may be in inconsistent state. Manual DBA intervention required.",
+            "System may be in inconsistent state. Critical failure logged to DLQ. Manual DBA intervention required.",
             lastRollbackError
         )
     }

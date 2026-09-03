@@ -1,5 +1,6 @@
 package com.danilo.banktransfer.infrastructure.config
 
+import com.danilo.banktransfer.infrastructure.service.DeadLetterService
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.kafka.listener.ConsumerRecordRecoverer
@@ -17,7 +18,9 @@ import org.slf4j.LoggerFactory
  * - Comprehensive error logging
  */
 @Configuration
-class KafkaRetryConfig {
+class KafkaRetryConfig(
+    private val deadLetterService: DeadLetterService
+) {
 
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -68,7 +71,19 @@ class KafkaRetryConfig {
             )
 
             // Send to SQS DLQ for manual intervention
-            logger.info("Failed message should be sent to SQS DLQ for manual review")
+            try {
+                val messageBody = String(record.value() as ByteArray)
+                deadLetterService.sendKafkaFailureToDLQ(
+                    topic = record.topic(),
+                    partition = record.partition(),
+                    offset = record.offset(),
+                    messageBody = messageBody,
+                    exception = exception
+                )
+                logger.info("Failed message sent to SQS DLQ for manual review")
+            } catch (e: Exception) {
+                logger.error("CRITICAL: Failed to send message to DLQ!", e)
+            }
         }
     }
 }
