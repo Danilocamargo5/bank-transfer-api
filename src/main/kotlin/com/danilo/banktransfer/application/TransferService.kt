@@ -90,16 +90,15 @@ class TransferService(
 
             logger.info("Debit/credit complete for ${event.transferId}. New balances: source=${updatedSourceAccount.balance}, dest=${updatedDestinationAccount.balance}")
 
-            // 7. Save updated accounts WITH ATOMIC GUARANTEE AND RETRY
-            saveAccountsWithRetryAndRollback(
-                updatedSourceAccount = updatedSourceAccount,
-                updatedDestinationAccount = updatedDestinationAccount,
-                originalSourceAccount = sourceAccount,
-                originalDestinationAccount = destinationAccount,
+            // 7. Save updated accounts ATOMICALLY using DynamoDB TransactWriteItems
+            // This guarantees: BOTH succeed or BOTH fail (no partial updates)
+            saveAccountsAtomically(
+                sourceAccount = updatedSourceAccount,
+                destinationAccount = updatedDestinationAccount,
                 transferId = event.transferId
             )
 
-            logger.info("Accounts saved for ${event.transferId}")
+            logger.info("Accounts saved atomically for ${event.transferId}")
 
             // 8. Create and save transfer record as COMPLETED
             val transfer = Transfer(
@@ -178,125 +177,58 @@ class TransferService(
     }
 
     /**
-     * Save accounts with retry and rollback mechanism
-     * Ensures atomicity: both save or both rollback to original state
+     * Save accounts ATOMICALLY using DynamoDB TransactWriteItems
+     * Guarantees: BOTH accounts update or NEITHER updates (true ACID)
+     * 
+     * For transient failures (network, throttling), retry with exponential backoff
+     * For validation errors, fail immediately
      */
-    private fun saveAccountsWithRetryAndRollback(
-        updatedSourceAccount: com.danilo.banktransfer.domain.model.Account,
-        updatedDestinationAccount: com.danilo.banktransfer.domain.model.Account,
-        originalSourceAccount: com.danilo.banktransfer.domain.model.Account,
-        originalDestinationAccount: com.danilo.banktransfer.domain.model.Account,
+    private fun saveAccountsAtomically(
+        sourceAccount: com.danilo.banktransfer.domain.model.Account,
+        destinationAccount: com.danilo.banktransfer.domain.model.Account,
         transferId: String
     ) {
         var lastException: Exception? = null
 
-        // Try to save with retries
+        // Retry only for transient errors (network glitches, throttling)
         for (attempt in 1..MAX_RETRIES) {
             try {
-                logger.info("Attempt $attempt to save accounts for transfer $transferId")
+                logger.info("Attempt $attempt to atomically save accounts for transfer $transferId")
                 
-                accountRepository.save(updatedSourceAccount)
-                accountRepository.save(updatedDestinationAccount)
+                // DynamoDB TransactWriteItems: BOTH save or BOTH fail
+                accountRepository.saveAtomically(sourceAccount, destinationAccount)
                 
-                logger.info("Successfully saved accounts for transfer $transferId on attempt $attempt")
+                logger.info("Successfully saved accounts atomically for transfer $transferId on attempt $attempt")
                 return  // Success, exit
+            } catch (e: software.amazon.awssdk.services.dynamodb.model.ValidationException) {
+                // Validation error = permanent error, don't retry
+                logger.error("Validation error for transfer $transferId (cannot retry): ${e.message}")
+                throw InvalidTransferException("Validation error: ${e.message}")
+            } catch (e: software.amazon.awssdk.services.dynamodb.model.TransactionCanceledException) {
+                // Transaction was canceled (e.g., DynamoDB condition failed)
+                logger.error("Transaction canceled for transfer $transferId: ${e.message}")
+                throw InvalidTransferException("Transaction was canceled: ${e.message}")
             } catch (e: Exception) {
+                // Transient error (network, timeout, throttling) - retry
                 lastException = e
-                logger.warn("Attempt $attempt failed to save accounts for transfer $transferId: ${e.message}")
+                logger.warn("Attempt $attempt failed to save accounts atomically for transfer $transferId: ${e.message}")
                 
                 if (attempt < MAX_RETRIES) {
                     val delayMs = INITIAL_BACKOFF_MS * (1L shl (attempt - 1))  // Exponential: 100, 200, 400
-                    logger.info("Waiting ${delayMs}ms before retry...")
+                    logger.info("Transient error detected. Waiting ${delayMs}ms before retry...")
                     Thread.sleep(delayMs)
+                } else {
+                    logger.error("All $MAX_RETRIES attempts failed for transfer $transferId")
                 }
             }
         }
 
-        // All retries failed, execute rollback
-        logger.error("All $MAX_RETRIES attempts failed for transfer $transferId. Executing ROLLBACK...")
-        executeRollback(
-            sourceAccount = originalSourceAccount,
-            destinationAccount = originalDestinationAccount,
-            transferId = transferId,
-            originalFailure = lastException
-        )
-
-        // If we reach here, rollback failed critically
-        throw IllegalStateException(
-            "CRITICAL: Failed to save accounts AND rollback failed for transfer $transferId. " +
-            "Original error: ${lastException?.message}. Manual intervention required!",
+        // All retries exhausted - permanent failure
+        throw InvalidTransferException(
+            "CRITICAL: Failed to atomically save accounts for transfer $transferId after $MAX_RETRIES attempts. " +
+            "System is in CONSISTENT state (no partial updates due to DynamoDB transactional guarantee). " +
+            "Error: ${lastException?.message}",
             lastException
-        )
-    }
-
-    /**
-     * Execute rollback with retry mechanism
-     * If rollback also fails, throw exception (system is in inconsistent state)
-     */
-    private fun executeRollback(
-        sourceAccount: com.danilo.banktransfer.domain.model.Account,
-        destinationAccount: com.danilo.banktransfer.domain.model.Account,
-        transferId: String,
-        originalFailure: Exception?
-    ) {
-        var lastRollbackError: Exception? = null
-
-        for (attempt in 1..MAX_RETRIES) {
-            try {
-                logger.error("Rollback attempt $attempt for transfer $transferId")
-                
-                // Restore original balances
-                accountRepository.save(sourceAccount)
-                accountRepository.save(destinationAccount)
-                
-                logger.error("ROLLBACK SUCCESS for transfer $transferId on attempt $attempt. State restored to original.")
-                return  // Rollback succeeded
-            } catch (e: Exception) {
-                lastRollbackError = e
-                logger.error("Rollback attempt $attempt FAILED for transfer $transferId: ${e.message}", e)
-                
-                if (attempt < MAX_RETRIES) {
-                    val delayMs = INITIAL_BACKOFF_MS * (1L shl (attempt - 1))
-                    logger.error("Waiting ${delayMs}ms before retry...")
-                    Thread.sleep(delayMs)
-                }
-            }
-        }
-
-        // Critical error: Neither save nor rollback worked
-        logger.error(
-            "CRITICAL FAILURE for transfer $transferId: " +
-            "Failed to save accounts (${originalFailure?.message}) AND " +
-            "failed to rollback (${lastRollbackError?.message}). " +
-            "System is in INCONSISTENT STATE. MANUAL INTERVENTION REQUIRED!",
-            lastRollbackError
-        )
-
-        // Send to DLQ for manual intervention
-        try {
-            deadLetterService.sendCriticalFailureToDLQ(
-                transferId = transferId,
-                sourceAccountId = sourceAccount.accountId,
-                destinationAccountId = destinationAccount.accountId,
-                amount = sourceAccount.balance.toString(),
-                currency = sourceAccount.currency.name,
-                failureReason = "CRITICAL: Both save and rollback failed. " +
-                    "Original error: ${originalFailure?.message}. " +
-                    "Rollback error: ${lastRollbackError?.message}",
-                severity = "CRITICAL_DATA_INCONSISTENCY"
-            )
-        } catch (dlqError: Exception) {
-            logger.error(
-                "CATASTROPHIC: Could not send critical failure to DLQ! " +
-                "Transfer $transferId status is UNKNOWN. Manual intervention REQUIRED IMMEDIATELY!",
-                dlqError
-            )
-        }
-
-        throw IllegalStateException(
-            "CRITICAL: Rollback failed for transfer $transferId after $MAX_RETRIES attempts. " +
-            "System may be in inconsistent state. Critical failure logged to DLQ. Manual DBA intervention required.",
-            lastRollbackError
         )
     }
 

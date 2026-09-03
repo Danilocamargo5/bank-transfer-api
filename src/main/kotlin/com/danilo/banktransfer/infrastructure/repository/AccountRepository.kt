@@ -10,6 +10,9 @@ import software.amazon.awssdk.services.dynamodb.model.GetItemRequest
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest
 import software.amazon.awssdk.services.dynamodb.model.ScanRequest
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
+import software.amazon.awssdk.services.dynamodb.model.TransactWriteItemsRequest
+import software.amazon.awssdk.services.dynamodb.model.TransactWriteItem
+import software.amazon.awssdk.services.dynamodb.model.Put
 import java.util.Optional
 
 @Repository
@@ -27,6 +30,33 @@ class AccountRepository(
 
         dynamoDbClient.putItem(request)
         return account
+    }
+
+    /**
+     * Save multiple accounts atomically using DynamoDB TransactWriteItems
+     * Either ALL succeed or ALL fail (no partial updates)
+     */
+    fun saveAtomically(vararg accounts: Account) {
+        if (accounts.isEmpty()) {
+            throw IllegalArgumentException("At least one account must be provided")
+        }
+
+        val transactItems = accounts.map { account ->
+            TransactWriteItem.builder()
+                .put(
+                    Put.builder()
+                        .tableName(tableName)
+                        .item(AccountMapper.toDynamoDBItem(account))
+                        .build()
+                )
+                .build()
+        }
+
+        val request = TransactWriteItemsRequest.builder()
+            .transactItems(transactItems)
+            .build()
+
+        dynamoDbClient.transactWriteItems(request)
     }
 
     fun findById(accountId: String): Optional<Account> {

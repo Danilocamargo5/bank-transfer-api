@@ -72,12 +72,12 @@ class TransferServiceTest {
     }
     
     @Test
-    fun `should process transfer successfully`() {
+    fun `should process transfer successfully with atomic transaction`() {
         // Given
         every { transferRepository.hasCompletedTransfer("tf-001") } returns false
         every { accountRepository.findById("acc-001") } returns Optional.of(sourceAccount)
         every { accountRepository.findById("acc-002") } returns Optional.of(destinationAccount)
-        every { accountRepository.save(any()) } returns sourceAccount
+        every { accountRepository.saveAtomically(any(), any()) } just runs
         every { transferRepository.save(any()) } returns mockk()
         every { transferMetrics.recordTransferProcessingTime(any()) } just runs
         every { transferMetrics.recordTransferSuccess() } just runs
@@ -154,5 +154,53 @@ class TransferServiceTest {
         
         // Then
         assertTrue(result is TransferService.Result.Failure)
+    }
+    
+    @Test
+    fun `should retry on transient failure and succeed on second attempt`() {
+        // Given
+        every { transferRepository.hasCompletedTransfer("tf-001") } returns false
+        every { accountRepository.findById("acc-001") } returns Optional.of(sourceAccount)
+        every { accountRepository.findById("acc-002") } returns Optional.of(destinationAccount)
+        
+        // First call fails (transient error), second succeeds
+        every { accountRepository.saveAtomically(any(), any()) } 
+            .throws(RuntimeException("Network timeout"))
+            .andThen { just(Unit)() }
+        
+        every { transferRepository.save(any()) } returns mockk()
+        every { transferMetrics.recordTransferProcessingTime(any()) } just runs
+        every { transferMetrics.recordTransferSuccess() } just runs
+        
+        // When
+        val result = transferService.processTransfer(transferEvent)
+        
+        // Then
+        assertTrue(result is TransferService.Result.Success)
+        verify(exactly = 2) { accountRepository.saveAtomically(any(), any()) }
+    }
+    
+    @Test
+    fun `should fail after all retries exhausted`() {
+        // Given
+        every { transferRepository.hasCompletedTransfer("tf-001") } returns false
+        every { accountRepository.findById("acc-001") } returns Optional.of(sourceAccount)
+        every { accountRepository.findById("acc-002") } returns Optional.of(destinationAccount)
+        
+        // All attempts fail (transient errors)
+        every { accountRepository.saveAtomically(any(), any()) } 
+            .throws(RuntimeException("DynamoDB timeout"))
+        
+        every { transferRepository.save(any()) } returns mockk()
+        every { transferMetrics.recordTransferProcessingTime(any()) } just runs
+        every { transferMetrics.recordTransferFailure(any()) } just runs
+        
+        // When
+        val result = transferService.processTransfer(transferEvent)
+        
+        // Then
+        assertTrue(result is TransferService.Result.Failure)
+        // Should have attempted 3 times (MAX_RETRIES)
+        verify(exactly = 3) { accountRepository.saveAtomically(any(), any()) }
     }
 }
