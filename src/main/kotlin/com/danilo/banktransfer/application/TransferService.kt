@@ -10,12 +10,15 @@ import com.danilo.banktransfer.domain.model.TransferCompletedEvent
 import com.danilo.banktransfer.domain.model.TransferFailedEvent
 import com.danilo.banktransfer.domain.model.TransferRequestedEvent
 import com.danilo.banktransfer.domain.enums.Currency
+import com.danilo.banktransfer.domain.enums.ErrorType
 import com.danilo.banktransfer.domain.enums.TransferStatus
 import com.danilo.banktransfer.infrastructure.repository.AccountRepository
 import com.danilo.banktransfer.infrastructure.repository.TransferRepository
 import com.danilo.banktransfer.infrastructure.metrics.TransferMetrics
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import software.amazon.awssdk.services.dynamodb.model.TransactionCanceledException
+import software.amazon.awssdk.services.dynamodb.model.ValidationException
 import java.time.Instant
 
 @Service
@@ -200,14 +203,14 @@ class TransferService(
                 
                 logger.info("Successfully saved accounts atomically for transfer $transferId on attempt $attempt")
                 return  // Success, exit
-            } catch (e: software.amazon.awssdk.services.dynamodb.model.ValidationException) {
+            } catch (e: ValidationException) {
                 // Validation error = permanent error, don't retry
                 logger.error("Validation error for transfer $transferId (cannot retry): ${e.message}")
-                throw InvalidTransferException("Validation error: ${e.message}")
-            } catch (e: software.amazon.awssdk.services.dynamodb.model.TransactionCanceledException) {
+                throw InvalidTransferException("Validation error: ${e.message}", ErrorType.INVALID_TRANSFER_ID, e)
+            } catch (e: TransactionCanceledException) {
                 // Transaction was canceled (e.g., DynamoDB condition failed)
                 logger.error("Transaction canceled for transfer $transferId: ${e.message}")
-                throw InvalidTransferException("Transaction was canceled: ${e.message}")
+                throw InvalidTransferException("Transaction was canceled: ${e.message}", ErrorType.INVALID_TRANSFER_ID, e)
             } catch (e: Exception) {
                 // Transient error (network, timeout, throttling) - retry
                 lastException = e
@@ -228,6 +231,7 @@ class TransferService(
             "CRITICAL: Failed to atomically save accounts for transfer $transferId after $MAX_RETRIES attempts. " +
             "System is in CONSISTENT state (no partial updates due to DynamoDB transactional guarantee). " +
             "Error: ${lastException?.message}",
+            ErrorType.INTERNAL_ERROR,
             lastException
         )
     }
