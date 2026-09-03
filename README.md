@@ -1,136 +1,275 @@
 # Bank Transfer API
 
-Microserviço de processamento de transferências bancárias internas com Kafka, DynamoDB e Spring Boot.
+A production-grade microservice for processing bank transfers with guaranteed atomicity, idempotency, and resilience patterns.
 
-## 🎯 Visão Geral
+## Overview
 
-Sistema core bancário para processar transferências entre contas do mesmo banco. Implementa arquitetura baseada em eventos com processamento assíncrono, garantindo atomicidade, idempotência e tratamento robusto de erros.
+This is a Spring Boot 3.3.5 application built with Kotlin that processes financial transfers asynchronously via Apache Kafka. The system ensures data consistency through multiple layers of validation, error handling, and recovery mechanisms.
 
-## ✨ Features
-
-- ✅ **Transferências Atômicas** - Debit + credit em transação única (tudo ou nada)
-- ✅ **Idempotência** - Mesma transferência não é processada 2x
-- ✅ **Error Handling** - Retry com backoff exponencial, DLQ para falhas
-- ✅ **Validação Completa** - Saldo, status de conta, formato de dados
-- ✅ **Processamento Assíncrono** - Kafka para escalabilidade
-- ✅ **Observabilidade** - Métricas em tempo real via Micrometer
-- ✅ **Testes Automatizados** - 30+ casos cobrindo sucesso/falha/edge cases
-- ✅ **Dashboard Interativo** - Visualização de métricas em tempo real
-
-## 🏗️ Arquitetura
-
-```
-POST /api/v1/transfers (Spring Boot 8080)
-  ↓
-Kafka Topic: transfer-requested
-  ↓
-TransferKafkaConsumer
-  ├─ Validate (account exists, balance, status)
-  ├─ Execute atomically (@Transactional)
-  ├─ Update DynamoDB
-  └─ Publish result
-  
-✅ Success → Kafka: transfer-completed
-❌ Failure → SQS: transfer-failed (DLQ)
-```
-
-## 💻 Tech Stack
-
+**Tech Stack:**
 - **Language:** Kotlin 2.0.0
 - **Framework:** Spring Boot 3.3.5
 - **Runtime:** Java 21
-- **Database:** DynamoDB (LocalStack)
-- **Messaging:** Apache Kafka (KRaft), AWS SQS (LocalStack)
+- **Database:** DynamoDB (AWS/LocalStack)
+- **Messaging:** Apache Kafka (KRaft mode)
+- **Error Queue:** SQS (AWS/LocalStack)
 - **Build:** Gradle 8.8
-- **Testing:** JUnit 5 (30+ test cases)
-- **Metrics:** Micrometer
 
-## 📊 Dados de Exemplo
+## Architecture
 
-| accountId | balance | currency | status | customerName |
-|-----------|---------|----------|--------|--------------|
-| acc-123 | 5000.00 | BRL | ACTIVE | João Silva |
-| acc-456 | 1200.50 | BRL | ACTIVE | Maria Santos |
-| acc-789 | 300.00 | BRL | ACTIVE | Pedro Costa |
-| acc-000 | 0.00 | BRL | INACTIVE | Conta Encerrada |
+```
+External Sources (Scripts)
+        ↓
+   [Kafka Topic: transfer-requested]
+        ↓
+[TransferKafkaConsumer] ← Manual Acknowledgment
+        ↓
+[TransferService] → Retry with Exponential Backoff
+        ├─ Idempotency Check
+        ├─ Validation (format + business rules)
+        ├─ Account Lookup
+        ├─ Balance Validation
+        ├─ Atomic Debit/Credit (with Rollback)
+        └─ Persist Result
+        ↓
+   [Success: Kafka topic: transfer-completed]
+   [Failure: SQS queue: transfer-failed]
+   [Critical: SQS DLQ: transfer-failed-dlq]
+        ↓
+   [DynamoDB: transfers table]
+```
 
-## 🚀 Quick Start
+## Key Features
 
-### Automated Setup
+### 1. Idempotency Guarantee
+- Every transfer has a unique `transferId`
+- System detects and rejects duplicate processing
+- Prevents accidental double-charging
+- Implemented at TransferService level
+
+### 2. Atomicity with Rollback
+- Both accounts must be updated together (all-or-nothing)
+- If any save fails, both are rolled back to original state
+- Prevents partial updates leaving system inconsistent
+
+### 3. Retry with Exponential Backoff
+- 3 automatic retry attempts with 100ms, 200ms, 400ms delays
+- Recovers from transient failures (network glitches, temporary unavailability)
+- If all retries fail → system rolls back and sends to DLQ
+
+### 4. Manual Kafka Acknowledgment
+- Configuration: `enable-auto-commit=false`
+- Offset only advances when transfer completes successfully
+- If app crashes mid-processing, message is reprocessed on restart
+- Prevents message loss
+
+### 5. Dead Letter Queue (DLQ)
+- Critical failures sent to SQS for manual investigation
+- Separate tracking for:
+  - Data inconsistencies (save + rollback failed)
+  - Malformed Kafka messages (poison messages)
+  - Unrecoverable errors
+- Ops team can investigate and retry manually
+
+### 6. Comprehensive Validation
+- API level: format validation (TransferValidator)
+- Service level: business rules validation (TransferService)
+- Database level: entity constraints
+
+## API Endpoints
+
+### Transfer Management
+
+**POST** `/api/v1/transfers` - Validate and accept transfer (returns 202 ACCEPTED)
+```bash
+curl -X POST http://localhost:8080/api/v1/transfers \
+  -H "Content-Type: application/json" \
+  -d '{
+    "transferId": "tf-123",
+    "sourceAccountId": "acc-123",
+    "destinationAccountId": "acc-456",
+    "amount": 100.00,
+    "currency": "BRL"
+  }'
+```
+
+**GET** `/api/v1/transfers` - List all transfers
+```bash
+curl http://localhost:8080/api/v1/transfers
+```
+
+**GET** `/api/v1/transfers/{transferId}` - Get transfer status
+```bash
+curl http://localhost:8080/api/v1/transfers/tf-123
+```
+
+### Account Management
+
+**GET** `/api/v1/accounts` - List all accounts
+```bash
+curl http://localhost:8080/api/v1/accounts
+```
+
+**GET** `/api/v1/accounts/{accountId}` - Get account details
+```bash
+curl http://localhost:8080/api/v1/accounts/acc-123
+```
+
+**POST** `/api/v1/accounts` - Create new account
+```bash
+curl -X POST http://localhost:8080/api/v1/accounts \
+  -H "Content-Type: application/json" \
+  -d '{
+    "accountId": "acc-999",
+    "customerName": "João Silva",
+    "balance": 5000.00
+  }'
+```
+
+**PUT** `/api/v1/accounts/{accountId}` - Update account
+```bash
+curl -X PUT http://localhost:8080/api/v1/accounts/acc-123 \
+  -H "Content-Type: application/json" \
+  -d '{"balance": 7500.00}'
+```
+
+**DELETE** `/api/v1/accounts/{accountId}` - Delete account
+```bash
+curl -X DELETE http://localhost:8080/api/v1/accounts/acc-999
+```
+
+## Setup & Running
+
+### Prerequisites
+- Docker & Docker Compose
+- Java 21 (via SDKMAN)
+- Gradle 8.8
+
+### Local Development
+
+**1. Start Infrastructure**
 ```bash
 ./full-setup.sh
-./scripts/start-app.sh
-./scripts/DEMO2.sh
-
-# Dashboard available at:
-# - Local: http://localhost:8080/metrics-dashboard.html
-# - Codespaces: https://[your-codespace].app.github.dev/metrics-dashboard.html
 ```
 
-For detailed setup instructions, see [Setup Guide](./SETUP.md) or [Scripts Documentation](./scripts/README.md)
-
-## 📈 Metrics & Monitoring
-
-Real-time dashboard available at:
-```
-Local: http://localhost:8080/metrics-dashboard.html
-Codespaces: https://[your-codespace].app.github.dev/metrics-dashboard.html
-```
-
-The dashboard automatically detects the environment and uses the correct URLs.
-
-Metrics:
-- Transfer processing time
-- Success/failure counts
-- Error type breakdown
-- Application health status
-
-## 🧪 Testing
-
-Run automated tests:
+**2. Start Application (in separate terminal)**
 ```bash
-./scripts/DEMO.sh          # Basic demo (8 scenarios)
-./scripts/DEMO2.sh         # Extended demo (40+ test data points)
+./scripts/start-app.sh
 ```
 
-Run unit tests:
+**3. Test with Additional Messages (optional)**
+```bash
+./scripts/DEMO2.sh
+```
+
+### Monitoring
+
+**Health Check:**
+```bash
+curl http://localhost:8080/actuator/health
+```
+
+**Kafka UI:**
+http://localhost:8081
+
+## Testing
+
+**Run all unit tests:**
 ```bash
 ./gradlew test
 ```
 
-## 📚 Documentation
-
-- [Setup Guide](./SETUP.md) - Local development setup
-- [Scripts Documentation](./scripts/README.md) - How to run scripts
-- [Code Review](./docs/CODE_REVIEW_LEGACY.md) - Analysis of common pitfalls
-- [Error Handling](./docs/ERROR_HANDLING.md) - Error strategy
-
-## ✅ Project Status
-
-**Completed:**
-- PR #1-6: Core features + error handling + DLQ
-- PR #7: Metrics & observability (Micrometer)
-- PR #8: Automated tests (30+ cases)
-- Infrastructure: Docker-compose with Kafka + LocalStack
-- Dashboard: Real-time metrics visualization
-
 **Test Coverage:**
-- TransferValidator: 10 test cases
-- TransferService: 6 test cases
-- TransferController: 5 test cases
-- TransferKafkaConsumer: 3 test cases
-- AccountController: 3 test cases
-- Integration Tests: 3 scenarios
-- **Total: 30+ automated tests**
+- 32 tests total, 100% passing
+- Controller: 8 tests
+- Service: 5 tests  
+- Validator: 11 tests
+- Integration: 3 tests
+- Messaging: 5 tests
 
-## 🎯 Key Design Decisions
+## Validation Rules
 
-1. **Async Processing** - Kafka for scalability and decoupling
-2. **Atomicity** - @Transactional ensures debit+credit succeed together
-3. **Idempotency** - transferId as idempotency key prevents duplicates
-4. **Error Isolation** - DLQ separates business errors from system errors
-5. **Observability** - Metrics at every step for debugging
+### At API Level
+- `transferId`: non-empty, max 100 chars
+- `sourceAccountId` & `destinationAccountId`: non-empty
+- Source ≠ Destination
+- `amount`: > 0, max 2 decimals
+- `currency`: BRL only
 
-## 📝 License
+### At Service Level
+- Idempotency: transferId must be unique (no duplicates)
+- Accounts must exist and be ACTIVE
+- Source account must have sufficient balance
+- Currency validation (BRL only)
 
-Internal use only - Bank Transfer Processing System
+## Error Handling
+
+### API Level (400 BAD_REQUEST)
+- Invalid format
+- Business rule violations
+
+### Service Level (202 ACCEPTED → Event)
+- Account not found → FAILED event to SQS
+- Insufficient balance → FAILED event to SQS
+- Invalid currency → FAILED event to SQS
+- Account inactive → FAILED event to SQS
+
+### Critical Level (DLQ)
+- Save + Rollback failed (data inconsistency)
+- Kafka publish failed (completion event lost)
+- Malformed JSON (poison message)
+
+## Production Features
+
+✅ **Atomicity** - All-or-nothing account updates  
+✅ **Idempotency** - No duplicate processing  
+✅ **Resilience** - Retry with exponential backoff  
+✅ **Observability** - Metrics, health checks, logs  
+✅ **Auditability** - Complete transfer history  
+✅ **Recoverability** - DLQ for manual intervention  
+
+## Troubleshooting
+
+**Transfer stuck in PENDING:**
+→ App crashed mid-processing. Restart app to resume.
+
+**Account balance inconsistent:**
+→ Check DLQ for failed rollback events. Manual DBA intervention needed.
+
+**Messages not being consumed:**
+→ Check app logs for errors. Verify Kafka topics exist.
+
+## Development Notes
+
+### Project Structure
+```
+src/main/kotlin/com/danilo/banktransfer/
+├── api/controller/           # REST endpoints
+├── application/              # Business logic
+├── domain/
+│   ├── model/               # Entities
+│   ├── enums/               # Status, Currency
+│   └── validator/           # Validation
+├── infrastructure/
+│   ├── repository/          # DynamoDB
+│   ├── messaging/           # Kafka consumer
+│   ├── service/             # DLQ
+│   └── config/              # Spring config
+└── application/exception/   # Custom exceptions
+```
+
+### Key Implementation Details
+
+**Idempotency:** Checked via `transferRepository.hasCompletedTransfer(transferId)`
+
+**Atomicity:** Implemented with retry + rollback in `saveAccountsWithRetryAndRollback()`
+
+**Manual ACK:** Set `spring.kafka.consumer.enable-auto-commit=false`
+
+**Retry Strategy:** 3 attempts with 100ms, 200ms, 400ms exponential backoff
+
+**DLQ Routing:** Critical failures sent via `DeadLetterService` to SQS
+
+## License
+
+Internal use only.
