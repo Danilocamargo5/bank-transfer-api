@@ -33,7 +33,7 @@ class TransferKafkaConsumer(
     fun consumeTransferRequest(
         @Payload message: String,
         @Header(KafkaHeaders.RECEIVED_TOPIC) topic: String,
-        @Header(KafkaHeaders.RECEIVED_PARTITION_ID) partition: Int,
+        @Header("kafka_receivedPartitionId") partition: Int,
         @Header(KafkaHeaders.OFFSET) offset: Long,
         acknowledgment: Acknowledgment
     ) {
