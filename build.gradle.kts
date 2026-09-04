@@ -102,7 +102,6 @@ tasks.jacocoTestReport {
 		)
 	)
 }
-}
 
 // Print coverage summary
 tasks.register("coverageSummary") {
