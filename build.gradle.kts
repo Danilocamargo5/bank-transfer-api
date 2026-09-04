@@ -85,6 +85,22 @@ tasks.jacocoTestReport {
 		html.required.set(true)
 		csv.required.set(false)
 	}
+	
+	// Exclude certain classes/packages from coverage
+	classDirectories.setFrom(
+		files(
+			classDirectories.files.map { classDir ->
+				fileTree(classDir) {
+					exclude(
+						"**/config/**",
+						"**/model/**",
+						"**/enums/**",
+						"**/BankTransferApplication**"
+					)
+				}
+			}
+		)
+	)
 }
 }
 
