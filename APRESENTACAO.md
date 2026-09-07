@@ -5,7 +5,7 @@
 **Linguagem:** Kotlin 2.0.0 | **Framework:** Spring Boot 3.3.5 | **Runtime:** Java 21 | **Build:** Gradle 8.8
 
 **Banco:** DynamoDB via LocalStack (AWS SDK v2) → TransactWriteItems (ACID/atomicidade)
-**Mensageria:** Apache Kafka (KRaft mode) → replay de mensagens, audit trail
+**Mensageria:** Apache Kafka (KRaft mode) → replay de mensagens, audit trail  
 **Fila Crítica:** SQS (LocalStack) → transfer-failed (retryable), transfer-failed-dlq (crítico)
 **Testing:** JUnit 5 (5.10.x) + MockK (1.13.x) + Kotlin Test (1.10.x) + JaCoCo → 74% coverage
 **Observabilidade:** Micrometer + SLF4J/Logback + Jackson
@@ -13,7 +13,7 @@
 
 ---
 
-## 🏗️ Arquitetura
+## 🏗️ Arquitetura Geral
 
 ```
 External Scripts → Kafka "transfer-requested"
@@ -24,10 +24,22 @@ TransferService (retry + DLQ)
     ↓
 DynamoDB (atomic transactions via TransactWriteItems)
     ↓
-Success: Kafka "transfer-completed" 
-Failure: SQS "transfer-failed" 
+Success: Kafka "transfer-completed"
+Failure: SQS "transfer-failed"
 Critical: SQS "transfer-failed-dlq"
 ```
+
+---
+
+## 📋 Classes Principais
+
+1. **TransferKafkaConsumer** - Consome Kafka, manual ACK
+2. **TransferService** - Orquestra 8 passos
+3. **TransferValidator** - Valida regras negócio (object singleton)
+4. **AccountRepository** - Acesso DynamoDB
+5. **DeadLetterService** - Envia pra SQS DLQ
+6. **TransferMetrics** - Métricas Micrometer
+7. **Controllers** - API REST
 
 ---
 
@@ -51,9 +63,9 @@ Critical: SQS "transfer-failed-dlq"
 **Arquivo:** `messaging/TransferKafkaConsumer.kt`
 
 **O que faz:**
-- ✅ Consome mensagens do Kafka topic "transfer-requested"
-- ✅ Manual ACK (confirma só depois de processar)
-- ✅ Desacoplado (só chama TransferService)
+- Consome mensagens do Kafka topic "transfer-requested"
+- Manual ACK (confirma só depois de processar)
+- Desacoplado (só chama TransferService)
 
 ```kotlin
 @KafkaListener(topics = ["transfer-requested"])
@@ -86,14 +98,14 @@ fun consumeTransfer(message: ConsumerRecord<String, String>) {
 **Arquivo:** `application/TransferService.kt`
 
 **Responsabilidades (8 passos):**
-1. ✅ Valida entrada (TransferValidator)
-2. ✅ Detecta duplicata (idempotência)
-3. ✅ Busca conta source
-4. ✅ Busca conta destination
-5. ✅ Valida status (ambas ACTIVE)
-6. ✅ Valida saldo
-7. ✅ Salva atomicamente com retry 3x (backoff: 100ms, 200ms, 400ms)
-8. ✅ Publica resultado (success ou failure)
+1. Valida entrada (TransferValidator)
+2. Detecta duplicata (idempotência)
+3. Busca conta source
+4. Busca conta destination
+5. Valida status (ambas ACTIVE)
+6. Valida saldo
+7. Salva atomicamente com retry 3x (backoff: 100ms, 200ms, 400ms)
+8. Publica resultado (success ou failure)
 
 **Retry com Backoff Exponencial:**
 - 1ª tentativa falha → espera 100ms
@@ -138,10 +150,10 @@ object TransferValidator {
 ```
 
 **Valida:**
-- ✅ transferId (não vazio, tamanho máximo)
-- ✅ accountIds (diferentes, válidos)
-- ✅ amount (positivo, máximo 2 decimais)
-- ✅ currency (BRL apenas)
+- transferId (não vazio, tamanho máximo)
+- accountIds (diferentes, válidos)
+- amount (positivo, máximo 2 decimais)
+- currency (BRL apenas)
 
 ---
 
@@ -150,9 +162,9 @@ object TransferValidator {
 **Arquivo:** `infrastructure/repository/AccountRepository.kt`
 
 **O que faz:**
-- ✅ Acesso dados (DynamoDB)
-- ✅ `findById(accountId)` - busca conta
-- ✅ `saveAtomically(source, dest)` - **SALVA DUAS CONTAS EM UMA TRANSAÇÃO**
+- Acesso dados (DynamoDB)
+- `findById(accountId)` - busca conta
+- `saveAtomically(source, dest)` - **SALVA DUAS CONTAS EM UMA TRANSAÇÃO**
 
 **Método Crítico: saveAtomically()**
 
@@ -185,7 +197,7 @@ fun saveAtomically(source: Account, destination: Account) {
 ```
 
 **⚠️ IMPORTANTE - ATOMICIDADE:**
-**TransactWriteItems:** Ambas contas salvam ou ambas falham. Impossível partial failure.
+TransactWriteItems: Ambas contas salvam ou ambas falham. Impossível partial failure.
 
 ---
 
@@ -228,9 +240,9 @@ class TransferMetrics(private val meterRegistry: MeterRegistry) {
 **Arquivo:** `infrastructure/service/DeadLetterService.kt`
 
 **O que faz:**
-- ✅ Envia mensagens que falharam para SQS "transfer-failed-dlq"
-- ✅ Registra log + timestamp + exception
-- ✅ Admin investiga depois
+- Envia mensagens que falharam para SQS "transfer-failed-dlq"
+- Registra log + timestamp + exception
+- Admin investiga depois
 
 ```kotlin
 fun sendToDeadLetter(event: TransferRequestedEvent, exception: Exception) {
@@ -271,7 +283,7 @@ fun sendToDeadLetter(event: TransferRequestedEvent, exception: Exception) {
 **Arquivo:** `application/AtomicityGuaranteeTest.kt`
 
 **Propósito:**
-**PROVA MATEMÁTICA** que atomicidade é garantida. Uma validação formal de que nenhuma partial failure é possível.
+PROVA MATEMÁTICA que atomicidade é garantida. Uma validação formal de que nenhuma partial failure é possível.
 
 ### O que é ACID?
 
@@ -325,6 +337,23 @@ fun `test name`() {
 **O que faz:** 1ª tentativa falha (timeout), 2ª OK → verifica chamou 2x
 **Resultado:** saveAtomically() chamado 2 vezes (1ª erro, 2ª sucesso) ✅
 
+### TESTE 4, 5, 6: Retry e Matriz
+
+**Teste 4:** Retries esgotados (3 tentativas falham) → vai pra DLQ. Verifica chamou exatamente 3x
+
+**Teste 5:** Debit falha → rollback automático, ambas contas não mudam
+
+**Teste 6:** Matriz de Cenários (TransactWriteItems)
+
+| Cenário | Debit | Credit | Resultado |
+|---------|-------|--------|-----------|
+| 1 | ✅ Success | ✅ Success | ✅ AMBOS SALVAM |
+| 2 | ✅ Success | ❌ Fail | ✅ AMBOS ROLLBACK |
+| 3 | ❌ Fail | ✅ Success | ✅ AMBOS ROLLBACK |
+| 4 | ❌ Fail | ❌ Fail | ✅ AMBOS ROLLBACK |
+
+**Conclusão:** TransactWriteItems garante ACID. Impossível perder dinheiro! ✅
+
 ---
 
 ## 📊 Resumo de Testes
@@ -347,43 +376,57 @@ fun `test name`() {
 
 ---
 
+## 🎓 Kotlin Avançado (P15-P18)
+
+**P15: O que é when expression?**
+Switch melhorado. Retorna valor, pode ter ranges, quando (when) nenhum case bate usa else.
+
+**P16: O que é Lambda?**
+Função anônima. Tipo: `{ x -> x * 2 }`. Usamos em map(), filter(), forEach() (functional programming).
+
+**P17: Scope functions (let, apply, run, also)?**
+Funções que executam bloco no contexto do objeto. `let` (transform), `apply` (configure), `run` (execute), `also` (side effect).
+
+**P18: O que é sealed class?**
+Restringe quem pode herdar. Só classes dentro do arquivo podem estender. Usado pra Result (Success/Failure).
+
+---
+
+## ⚡ Performance + 🚀 Deployment (P27-P32)
+
+**P27: Qual a escalabilidade? (throughput)**
+1000+ transfers/seg. DynamoDB serverless escala automático (RCU/WCU on-demand). Kafka paralelo (múltiplos consumers).
+
+**P28: Como mede performance?**
+Micrometer. Métricas: p95/p99 latency, error rate, throughput. Em produção: Prometheus + Grafana.
+
+**P29: Como evita DDoS / rate limit?**
+Rate limit por usuário/IP (Spring AOP decorator). Se excede: HTTP 429 (Too Many Requests).
+
+**P30: Como é o deploy?**
+GitHub Actions → Build Docker → Push ECR → ECS (blue-green deployment). Zero downtime.
+
+**P31: E se tiver bug em produção?**
+Rollback: volta pro container antigo (Docker image anterior). ECS manage isso automaticamente.
+
+**P32: Versionamento da API?**
+URL versionada: /v1/transfers, /v2/transfers. Permite quebrar sem afetar clientes antigos.
+
+---
+
 ## 🚀 Melhorias Futuras
 
-**P1 (Race Condition):**
-- UpdateExpression direto no DynamoDB: `SET balance = balance - :amount`
-- Evita GET → CALC → PUT (hoje propenso a race condition)
+**Race Condition (P1):**
+UpdateExpression direto no DynamoDB: `SET balance = balance - :amount`
+Evita GET → CALC → PUT (hoje propenso a race condition)
 
 **Logs Estruturados:**
-- Implementar JSON logs (hoje plain text)
+Implementar JSON logs (hoje plain text)
 
 **Circuit Breaker:**
-- Implementar padrão pra proteção em cascata
+Implementar padrão pra proteção em cascata
 
-**P44 (TransactWriteItems vs @Transactional):**
-- @Transactional funciona pra aplicação, mas não garante atomicidade no banco
-- TransactWriteItems = garantia no banco (DynamoDB ACID)
+**TransactWriteItems vs @Transactional (P44):**
+@Transactional funciona pra aplicação, mas não garante atomicidade no banco
+TransactWriteItems = garantia no banco (DynamoDB ACID)
 
----
-
-## 📈 Performance
-
-- **Throughput:** 1000+ transfers/seg (Kafka paralelo, DynamoDB serverless RCU/WCU on-demand)
-- **Latência:** ~60ms (validação + lookup + save). Com retry: 200-500ms
-- **Métricas:** Micrometer (p95/p99 latency, error rate, throughput). Em produção: Prometheus + Grafana
-
----
-
-## 🔐 Segurança
-
-- Parametrized queries (ORM/mapper, sem SQL injection)
-- userId em eventos (auditoria)
-- Rate limit por usuário (Spring AOP decorator)
-- Detecção fraude (padrões anormais de transfers)
-
----
-
-## 🌐 Deployment
-
-- **CI/CD:** GitHub Actions → Build Docker → Push ECR → ECS (blue-green deployment)
-- **Rollback:** Volta pro container antigo (Docker image anterior). Zero downtime.
-- **API Versioning:** /v1/transfers, /v2/transfers (quebra sem afetar clientes antigos)
