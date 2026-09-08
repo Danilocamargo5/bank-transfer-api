@@ -138,16 +138,15 @@ fun consumeTransfer(message: ConsumerRecord<String, String>) {
 
 **Arquivo:** `application/TransferService.kt`
 
-### Responsabilidades (9 pontos):
+### Responsabilidades (8 pontos):
 1. Valida transferência (formato, campos)
 2. Detecta duplicata (idempotência)
 3. Busca conta source em DynamoDB
 4. Busca conta destination em DynamoDB
 5. Valida status (ambas ACTIVE?)
 6. Valida saldo (source suficiente?)
-7. Calcula novo estado (debit/credit)
-8. Salva ATOMICAMENTE com retry
-9. Publica resultado (Kafka/SQS)
+7. Salva ATOMICAMENTE com retry (calcula + persiste)
+8. Publica resultado (Kafka/SQS)
 
 ### Fluxo dos 8 Passos (Resumido):
 
