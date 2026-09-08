@@ -116,6 +116,24 @@ class TransferKafkaConsumer(
             logger.info("Transfer completed event published for transferId=${event.transferId}")
         } catch (e: Exception) {
             logger.error("Failed to publish transfer completed event: ${e.message}", e)
+            
+            // Send to DLQ for manual investigation
+            try {
+                deadLetterService.sendCriticalFailureToDLQ(
+                    transferId = event.transferId,
+                    sourceAccountId = event.sourceAccountId,
+                    destinationAccountId = event.destinationAccountId,
+                    amount = event.amount.toString(),
+                    currency = event.currency,
+                    failureReason = "CRITICAL: Failed to publish transfer completed event to Kafka. " +
+                                   "Transfer is saved in DB but completion notification failed to send. " +
+                                   "Error: ${e.message}",
+                    severity = "CRITICAL"
+                )
+            } catch (dlqException: Exception) {
+                logger.error("CATASTROPHIC: Failed to send critical failure to DLQ for transfer ${event.transferId}", dlqException)
+            }
+            
             // Even if Kafka send fails, we already acknowledged the incoming message
             // This means the transfer is committed to DB but completion event failed to publish
             throw e
@@ -128,6 +146,24 @@ class TransferKafkaConsumer(
             logger.info("Transfer failed event published to SQS for transferId=${event.transferId}")
         } catch (e: Exception) {
             logger.error("Failed to publish transfer failed event to SQS: ${e.message}", e)
+            
+            // Send to DLQ for manual investigation
+            try {
+                deadLetterService.sendCriticalFailureToDLQ(
+                    transferId = event.transferId,
+                    sourceAccountId = event.sourceAccountId,
+                    destinationAccountId = event.destinationAccountId,
+                    amount = event.amount.toString(),
+                    currency = event.currency,
+                    failureReason = "CRITICAL: Failed to publish transfer failed event to SQS. " +
+                                   "Transfer is in DB but failure notification failed to send. " +
+                                   "Error: ${e.message}",
+                    severity = "CRITICAL"
+                )
+            } catch (dlqException: Exception) {
+                logger.error("CATASTROPHIC: Failed to send critical failure to DLQ for transfer ${event.transferId}", dlqException)
+            }
+            
             // Even if SQS send fails, we already acknowledged the incoming message
             // This means the transfer is committed to DB but failure event failed to publish
             throw e

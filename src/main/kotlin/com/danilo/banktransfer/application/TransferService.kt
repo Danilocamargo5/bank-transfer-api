@@ -218,6 +218,23 @@ class TransferService(
         }
 
         // All retries exhausted - permanent failure
+        // Send to DLQ for manual investigation
+        try {
+            deadLetterService.sendCriticalFailureToDLQ(
+                transferId = transferId,
+                sourceAccountId = sourceAccount.accountId,
+                destinationAccountId = destinationAccount.accountId,
+                amount = sourceAccount.balance.toString(),
+                currency = "BRL",
+                failureReason = "CRITICAL: Failed to atomically save accounts after $MAX_RETRIES attempts. " +
+                               "System is in CONSISTENT state but transfer could not be processed. " +
+                               "Error: ${lastException?.message}",
+                severity = "CRITICAL"
+            )
+        } catch (dlqException: Exception) {
+            logger.error("CATASTROPHIC: Failed to send critical failure to DLQ for transfer $transferId", dlqException)
+        }
+        
         throw InvalidTransferException(
             "CRITICAL: Failed to atomically save accounts for transfer $transferId after $MAX_RETRIES attempts. " +
             "System is in CONSISTENT state (no partial updates due to DynamoDB transactional guarantee). " +
