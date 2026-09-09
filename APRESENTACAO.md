@@ -30,25 +30,6 @@
 
 ---
 
-## 🎓 PONTOS-CHAVE PRAS RESPOSTAS
-
-**Por quê Kotlin?**  
-Menos verboso, null-safety automático, extension functions. Melhor que Java puro.
-
-**Por quê DynamoDB?**  
-Serverless (sem ops), escala automática, TransactWriteItems = ACID. Ideal pra microsserviço.
-
-**Por quê Kafka?**  
-Replay (offset), audit trail, event sourcing ready. SQS é fire-and-forget.
-
-**Por quê JUnit 5 + MockK?**  
-Modern testing, MockK nativa Kotlin (melhor que Mockito). AAA pattern.
-
-**Por quê LocalStack?**  
-Desenvolvimento e testes SEM AWS real. Idêntico em produção. Economiza $$.
-
----
-
 ## 🏗️ ARQUITETURA GERAL (2 min)
 
 ### Fluxo Visual:
