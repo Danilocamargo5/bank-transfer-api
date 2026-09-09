@@ -364,3 +364,4 @@ class RaceConditionMockTest {
 
         assertEquals(1, failureCount.get(), "Deve bloquear se conta não existir")
     }
+}
