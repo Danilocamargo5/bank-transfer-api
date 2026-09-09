@@ -68,7 +68,7 @@ class TransferServiceTest {
         transferRepository = mockk()
         transferMetrics = mockk()
         deadLetterService = mockk()
-        transferService = TransferService(accountRepository, transferRepository, transferMetrics, deadLetterService)
+        transferService = TransferService(accountRepository, transferRepository, transferMetrics, deadLetterService, "accounts")
     }
     
     @Test
