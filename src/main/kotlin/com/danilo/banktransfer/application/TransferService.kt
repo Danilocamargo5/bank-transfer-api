@@ -97,17 +97,7 @@ class TransferService(
 
             logger.info("Debit/credit complete for ${event.transferId}. New balances: source=${updatedSourceAccount.balance}, dest=${updatedDestinationAccount.balance}")
 
-            // 7. Save updated accounts ATOMICALLY using DynamoDB TransactWriteItems
-            // This guarantees: BOTH succeed or BOTH fail (no partial updates)
-            saveAccountsAtomically(
-                sourceAccount = updatedSourceAccount,
-                destinationAccount = updatedDestinationAccount,
-                transferId = event.transferId
-            )
-
-            logger.info("Accounts saved atomically for ${event.transferId}")
-
-            // 8. Create and save transfer record as COMPLETED
+            // 7. Create transfer record BEFORE atomic save (will be included in transaction)
             val transfer = Transfer(
                 transferId = event.transferId,
                 sourceAccountId = event.sourceAccountId,
@@ -122,9 +112,16 @@ class TransferService(
                 updatedAt = Instant.now()
             )
 
-            transferRepository.save(transfer)
+            // 8. Save updated accounts + transfer record ATOMICALLY in ONE transaction
+            // This guarantees: ALL THREE (source, dest, transfer) succeed or ALL fail
+            saveTransferWithAccountsAtomically(
+                sourceAccount = updatedSourceAccount,
+                destinationAccount = updatedDestinationAccount,
+                transfer = transfer,
+                transferId = event.transferId
+            )
 
-            logger.info("Transfer ${event.transferId} completed successfully")
+            logger.info("Transfer and accounts saved atomically for ${event.transferId}")
             
             val duration = System.currentTimeMillis() - startTime
             transferMetrics.recordTransferProcessingTime(duration)
@@ -189,15 +186,16 @@ class TransferService(
     }
 
     /**
-     * Save accounts ATOMICALLY using DynamoDB TransactWriteItems
-     * Guarantees: BOTH accounts update or NEITHER updates (true ACID)
+     * UNIFIED TRANSACTION: Save transfer + accounts ATOMICALLY
+     * Guarantees: ALL items (source account, dest account, transfer record) are saved TOGETHER
      * 
      * For transient failures (network, throttling), retry with exponential backoff
      * For validation errors, fail immediately
      */
-    private fun saveAccountsAtomically(
+    private fun saveTransferWithAccountsAtomically(
         sourceAccount: com.danilo.banktransfer.domain.model.Account,
         destinationAccount: com.danilo.banktransfer.domain.model.Account,
+        transfer: com.danilo.banktransfer.domain.model.Transfer,
         transferId: String
     ) {
         var lastException: Exception? = null
@@ -205,18 +203,23 @@ class TransferService(
         // Retry only for transient errors (network glitches, throttling)
         for (attempt in 1..MAX_RETRIES) {
             try {
-                logger.info("Attempt $attempt to atomically save accounts for transfer $transferId")
+                logger.info("Attempt $attempt to atomically save transfer and accounts for transfer $transferId")
                 
-                // DynamoDB TransactWriteItems: BOTH save or BOTH fail
-                accountRepository.saveAtomically(sourceAccount, destinationAccount)
+                // DynamoDB TransactWriteItems: All 3 writes (source, dest, transfer) or NONE
+                transferRepository.saveTransferWithAccountsAtomically(
+                    sourceAccount,
+                    destinationAccount,
+                    transfer,
+                    "account"  // accountTableName
+                )
                 
-                logger.info("Successfully saved accounts atomically for transfer $transferId on attempt $attempt")
+                logger.info("Successfully saved transfer and accounts atomically for transfer $transferId on attempt $attempt")
                 return  // Success, exit
             } catch (e: Exception) {
                 // Any error during atomic save - will retry or fail after MAX_RETRIES attempts
-                // DynamoDB transactional guarantee ensures BOTH save or BOTH fail (no partial updates)
+                // DynamoDB transactional guarantee ensures ALL save or ALL fail (no partial updates)
                 lastException = e
-                logger.warn("Attempt $attempt failed to save accounts atomically for transfer $transferId: ${e.message}")
+                logger.warn("Attempt $attempt failed to save transfer and accounts atomically for transfer $transferId: ${e.message}")
                 
                 if (attempt < MAX_RETRIES) {
                     val delayMs = INITIAL_BACKOFF_MS * (1L shl (attempt - 1))  // Exponential: 100, 200, 400
@@ -237,7 +240,7 @@ class TransferService(
                 destinationAccountId = destinationAccount.accountId,
                 amount = sourceAccount.balance.toString(),
                 currency = "BRL",
-                failureReason = "CRITICAL: Failed to atomically save accounts after $MAX_RETRIES attempts. " +
+                failureReason = "CRITICAL: Failed to atomically save transfer and accounts after $MAX_RETRIES attempts. " +
                                "System is in CONSISTENT state but transfer could not be processed. " +
                                "Error: ${lastException?.message}",
                 severity = "CRITICAL"
@@ -247,7 +250,7 @@ class TransferService(
         }
         
         throw InvalidTransferException(
-            "CRITICAL: Failed to atomically save accounts for transfer $transferId after $MAX_RETRIES attempts. " +
+            "CRITICAL: Failed to atomically save transfer and accounts for transfer $transferId after $MAX_RETRIES attempts. " +
             "System is in CONSISTENT state (no partial updates due to DynamoDB transactional guarantee). " +
             "Error: ${lastException?.message}",
             ErrorType.INTERNAL_ERROR,

@@ -11,6 +11,11 @@ import software.amazon.awssdk.services.dynamodb.model.PutItemRequest
 import software.amazon.awssdk.services.dynamodb.model.QueryRequest
 import software.amazon.awssdk.services.dynamodb.model.ScanRequest
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
+import software.amazon.awssdk.services.dynamodb.model.TransactWriteItemsRequest
+import software.amazon.awssdk.services.dynamodb.model.TransactWriteItem
+import software.amazon.awssdk.services.dynamodb.model.Put
+import com.danilo.banktransfer.infrastructure.mapper.AccountMapper
+import com.danilo.banktransfer.domain.model.Account
 import java.util.Optional
 
 @Repository
@@ -71,5 +76,65 @@ class TransferRepository(
     fun hasCompletedTransfer(transferId: String): Boolean {
         val transfers = findByTransferId(transferId)
         return transfers.any { it.status == TransferStatus.COMPLETED || it.status == TransferStatus.FAILED }
+    }
+
+    /**
+     * UNIFIED TRANSACTION: Save transfer + both accounts in ONE DynamoDB transaction
+     * 
+     * Guarantees:
+     * - All 3 items (source account, destination account, transfer record) are saved TOGETHER
+     * - If any write fails → ALL rollback (no partial updates)
+     * - Solves: Transfer record and account balances are ALWAYS in sync
+     * 
+     * @param sourceAccount Updated source account (after debit)
+     * @param destinationAccount Updated destination account (after credit)
+     * @param transfer Transfer record to save
+     * @param accountTableName DynamoDB accounts table
+     */
+    fun saveTransferWithAccountsAtomically(
+        sourceAccount: Account,
+        destinationAccount: Account,
+        transfer: Transfer,
+        accountTableName: String
+    ) {
+        // Create 3 writes for the unified transaction
+        val transactItems = listOf(
+            // Write 1: Source account
+            TransactWriteItem.builder()
+                .put(
+                    Put.builder()
+                        .tableName(accountTableName)
+                        .item(AccountMapper.toDynamoDBItem(sourceAccount))
+                        .build()
+                )
+                .build(),
+            
+            // Write 2: Destination account
+            TransactWriteItem.builder()
+                .put(
+                    Put.builder()
+                        .tableName(accountTableName)
+                        .item(AccountMapper.toDynamoDBItem(destinationAccount))
+                        .build()
+                )
+                .build(),
+            
+            // Write 3: Transfer record
+            TransactWriteItem.builder()
+                .put(
+                    Put.builder()
+                        .tableName(tableName)
+                        .item(TransferMapper.toDynamoDBItem(transfer))
+                        .build()
+                )
+                .build()
+        )
+
+        // Execute UNIFIED transaction: all 3 writes or nothing
+        val request = TransactWriteItemsRequest.builder()
+            .transactItems(transactItems)
+            .build()
+
+        dynamoDbClient.transactWriteItems(request)
     }
 }
