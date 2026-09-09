@@ -77,8 +77,7 @@ class TransferServiceTest {
         every { transferRepository.hasCompletedTransfer("tf-001") } returns false
         every { accountRepository.findById("acc-001") } returns Optional.of(sourceAccount)
         every { accountRepository.findById("acc-002") } returns Optional.of(destinationAccount)
-        every { accountRepository.saveAtomically(any(), any()) } just runs
-        every { transferRepository.save(any()) } returns mockk()
+        every { transferRepository.saveTransferWithAccountsAtomically(any(), any(), any(), any()) } just runs
         every { transferMetrics.recordTransferProcessingTime(any()) } just runs
         every { transferMetrics.recordTransferSuccess() } just runs
         
@@ -109,7 +108,6 @@ class TransferServiceTest {
         // Given
         every { transferRepository.hasCompletedTransfer("tf-001") } returns false
         every { accountRepository.findById("acc-001") } returns Optional.empty()
-        every { transferRepository.save(any()) } returns mockk()
         every { transferMetrics.recordTransferProcessingTime(any()) } just runs
         every { transferMetrics.recordTransferFailure(any()) } just runs
         
@@ -127,7 +125,6 @@ class TransferServiceTest {
         every { transferRepository.hasCompletedTransfer("tf-001") } returns false
         every { accountRepository.findById("acc-001") } returns Optional.of(poorAccount)
         every { accountRepository.findById("acc-002") } returns Optional.of(destinationAccount)
-        every { transferRepository.save(any()) } returns mockk()
         every { transferMetrics.recordTransferProcessingTime(any()) } just runs
         every { transferMetrics.recordTransferFailure(any()) } just runs
         
@@ -145,7 +142,6 @@ class TransferServiceTest {
         every { transferRepository.hasCompletedTransfer("tf-001") } returns false
         every { accountRepository.findById("acc-001") } returns Optional.of(inactiveAccount)
         every { accountRepository.findById("acc-002") } returns Optional.of(destinationAccount)
-        every { transferRepository.save(any()) } returns mockk()
         every { transferMetrics.recordTransferProcessingTime(any()) } just runs
         every { transferMetrics.recordTransferFailure(any()) } just runs
         
@@ -164,11 +160,10 @@ class TransferServiceTest {
         every { accountRepository.findById("acc-002") } returns Optional.of(destinationAccount)
         
         // First call fails (transient error), second succeeds
-        every { accountRepository.saveAtomically(any(), any()) } 
+        every { transferRepository.saveTransferWithAccountsAtomically(any(), any(), any(), any()) } 
             .throws(RuntimeException("Network timeout"))
             .andThen { Unit }
         
-        every { transferRepository.save(any()) } returns mockk()
         every { transferMetrics.recordTransferProcessingTime(any()) } just runs
         every { transferMetrics.recordTransferSuccess() } just runs
         
@@ -177,7 +172,7 @@ class TransferServiceTest {
         
         // Then
         assertTrue(result is TransferService.Result.Success)
-        verify(exactly = 2) { accountRepository.saveAtomically(any(), any()) }
+        verify(exactly = 2) { transferRepository.saveTransferWithAccountsAtomically(any(), any(), any(), any()) }
     }
     
     @Test
@@ -188,10 +183,9 @@ class TransferServiceTest {
         every { accountRepository.findById("acc-002") } returns Optional.of(destinationAccount)
         
         // All attempts fail (transient errors)
-        every { accountRepository.saveAtomically(any(), any()) } 
+        every { transferRepository.saveTransferWithAccountsAtomically(any(), any(), any(), any()) } 
             .throws(RuntimeException("DynamoDB timeout"))
         
-        every { transferRepository.save(any()) } returns mockk()
         every { transferMetrics.recordTransferProcessingTime(any()) } just runs
         every { transferMetrics.recordTransferFailure(any()) } just runs
         
@@ -201,6 +195,6 @@ class TransferServiceTest {
         // Then
         assertTrue(result is TransferService.Result.Failure)
         // Should have attempted 3 times (MAX_RETRIES)
-        verify(exactly = 3) { accountRepository.saveAtomically(any(), any()) }
+        verify(exactly = 3) { transferRepository.saveTransferWithAccountsAtomically(any(), any(), any(), any()) }
     }
 }
