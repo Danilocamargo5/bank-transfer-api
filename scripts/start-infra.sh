@@ -2,6 +2,9 @@
 
 set -e
 
+echo "🧹 Cleaning up old containers..."
+docker-compose down 2>/dev/null || true
+
 echo "🚀 Starting Docker services..."
 docker-compose up -d kafka localstack kafka-ui
 
