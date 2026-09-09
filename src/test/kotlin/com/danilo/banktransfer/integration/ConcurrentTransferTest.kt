@@ -174,9 +174,9 @@ class ConcurrentTransferTest {
         println("acc-003: ${acc003.balance} (expected 1150.00)")
 
         // Verify atomicity: balances should be correct
-        assertEquals(BigDecimal("4900.00"), acc001.balance, "acc-001 should have 4900.00")
-        assertEquals(BigDecimal("2950.00"), acc002.balance, "acc-002 should have 2950.00")
-        assertEquals(BigDecimal("1150.00"), acc003.balance, "acc-003 should have received both (1000 + 100 + 50)")
+        assertEquals(0, acc001.balance.compareTo(BigDecimal("4900.00")), "acc-001 should have 4900.00")
+        assertEquals(0, acc002.balance.compareTo(BigDecimal("2950.00")), "acc-002 should have 2950.00")
+        assertEquals(0, acc003.balance.compareTo(BigDecimal("1150.00")), "acc-003 should have received both (1000 + 100 + 50)")
 
         println("\n✅ ATOMICITY VERIFIED: All balances correct!")
         println("✅ LOCKING WORKING: Both transfers completed without conflict!")
