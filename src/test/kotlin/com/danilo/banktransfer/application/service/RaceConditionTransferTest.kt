@@ -1,18 +1,20 @@
 package com.danilo.banktransfer.application.service
 
-import com.example.banktransfer.domain.Account
-import com.example.banktransfer.domain.Transfer
-import com.example.banktransfer.domain.TransferStatus
-import com.example.banktransfer.event.TransferEvent
-import com.example.banktransfer.repository.AccountRepository
-import com.example.banktransfer.repository.TransferRepository
+import com.danilo.banktransfer.application.TransferService
+import com.danilo.banktransfer.application.exception.DuplicateTransferException
+import com.danilo.banktransfer.domain.enums.AccountStatus
+import com.danilo.banktransfer.domain.enums.Currency
+import com.danilo.banktransfer.domain.model.Account
+import com.danilo.banktransfer.domain.model.TransferRequestedEvent
+import com.danilo.banktransfer.infrastructure.persistence.repository.AccountRepository
+import com.danilo.banktransfer.infrastructure.persistence.repository.TransferRepository
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.TestPropertySource
 import java.math.BigDecimal
+import java.time.Instant
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.assertEquals
@@ -38,17 +40,19 @@ class RaceConditionTransferTest {
     fun setup() {
         // Cria contas de teste
         val sourceAccount = Account(
-            id = sourceAccountId,
-            holderName = "João Silva",
+            accountId = sourceAccountId,
+            customerName = "João Silva",
             balance = BigDecimal("1000.00"),
-            isActive = true
+            currency = Currency.BRL,
+            status = AccountStatus.ACTIVE
         )
 
         val destAccount = Account(
-            id = destAccountId,
-            holderName = "Maria Santos",
+            accountId = destAccountId,
+            customerName = "Maria Santos",
             balance = BigDecimal("0.00"),
-            isActive = true
+            currency = Currency.BRL,
+            status = AccountStatus.ACTIVE
         )
 
         accountRepository.save(sourceAccount)
@@ -84,20 +88,22 @@ class RaceConditionTransferTest {
         val thread2EndTime = AtomicInteger(0)
 
         // Cria 2 eventos idênticos
-        val event1 = TransferEvent(
+        val event1 = TransferRequestedEvent(
             transferId = transferId,
             sourceAccountId = sourceAccountId,
             destinationAccountId = destAccountId,
             amount = transferAmount,
-            description = "Transferência teste race condition #1"
+            currency = "BRL",
+            requestedAt = Instant.now()
         )
 
-        val event2 = TransferEvent(
+        val event2 = TransferRequestedEvent(
             transferId = transferId,  // ⚠️ MESMO ID!
             sourceAccountId = sourceAccountId,
             destinationAccountId = destAccountId,
             amount = transferAmount,
-            description = "Transferência teste race condition #2"
+            currency = "BRL",
+            requestedAt = Instant.now()
         )
 
         // Thread 1
@@ -193,8 +199,8 @@ class RaceConditionTransferTest {
         )
 
         // Verifica saldo final (prova que foi atômico)
-        val sourceAccountFinal = accountRepository.findById(sourceAccountId)
-        val destAccountFinal = accountRepository.findById(destAccountId)
+        val sourceAccountFinal = accountRepository.findByAccountId(sourceAccountId)
+        val destAccountFinal = accountRepository.findByAccountId(destAccountId)
 
         assertEquals(
             BigDecimal("900.00"),
@@ -234,29 +240,32 @@ class RaceConditionTransferTest {
 
         val destAccount2 = "ACC-DEST-002"
         val account2 = Account(
-            id = destAccount2,
-            holderName = "Carlos Costa",
+            accountId = destAccount2,
+            customerName = "Carlos Costa",
             balance = BigDecimal("0.00"),
-            isActive = true
+            currency = Currency.BRL,
+            status = AccountStatus.ACTIVE
         )
         accountRepository.save(account2)
 
         // Evento 1: Para dest 1
-        val event1 = TransferEvent(
+        val event1 = TransferRequestedEvent(
             transferId = "TRF-DIFF-001",
             sourceAccountId = sourceAccountId,
             destinationAccountId = destAccountId,
             amount = transferAmount,
-            description = "Transferência para conta 1"
+            currency = "BRL",
+            requestedAt = Instant.now()
         )
 
         // Evento 2: Para dest 2 (conta diferente!)
-        val event2 = TransferEvent(
+        val event2 = TransferRequestedEvent(
             transferId = "TRF-DIFF-002",
             sourceAccountId = sourceAccountId,
             destinationAccountId = destAccount2,
             amount = transferAmount,
-            description = "Transferência para conta 2"
+            currency = "BRL",
+            requestedAt = Instant.now()
         )
 
         // Thread 1
@@ -292,13 +301,13 @@ class RaceConditionTransferTest {
         assertEquals(0, exceptions.size, "Nenhuma exceção")
 
         // Verifica saldos
-        val sourceFinal = accountRepository.findById(sourceAccountId)
+        val sourceFinal = accountRepository.findByAccountId(sourceAccountId)
         assertEquals(BigDecimal("900.00"), sourceFinal?.balance, "Origem: 1000 - 50 - 50 = 900")
 
-        val dest1Final = accountRepository.findById(destAccountId)
+        val dest1Final = accountRepository.findByAccountId(destAccountId)
         assertEquals(BigDecimal("50.00"), dest1Final?.balance, "Dest 1: 0 + 50 = 50")
 
-        val dest2Final = accountRepository.findById(destAccount2)
+        val dest2Final = accountRepository.findByAccountId(destAccount2)
         assertEquals(BigDecimal("50.00"), dest2Final?.balance, "Dest 2: 0 + 50 = 50")
 
         println("✅ TESTE PASSOU: Ambas transferências processadas corretamente!")
@@ -324,12 +333,13 @@ class RaceConditionTransferTest {
         repeat(threadCount) { index ->
             Thread {
                 try {
-                    val event = TransferEvent(
+                    val event = TransferRequestedEvent(
                         transferId = "TRF-STRESS-001", // ⚠️ MESMO PARA TODAS!
                         sourceAccountId = sourceAccountId,
                         destinationAccountId = destAccountId,
                         amount = transferAmount,
-                        description = "Stress test #$index"
+                        currency = "BRL",
+                        requestedAt = Instant.now()
                     )
                     transferService.processTransfer(event)
                     successCount.incrementAndGet()
