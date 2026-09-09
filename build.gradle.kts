@@ -34,6 +34,9 @@ dependencies {
 	// AWS SQS
 	implementation("software.amazon.awssdk:sqs:2.25.0")
 	
+	// AWS LockClient for distributed locking
+	implementation("software.amazon.awssdk:dynamodb-lock-client:2.0.0")
+	
 	// Kotlin
 	implementation("org.jetbrains.kotlin:kotlin-reflect")
 	implementation("org.jetbrains.kotlin:kotlin-stdlib")

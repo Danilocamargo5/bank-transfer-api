@@ -48,6 +48,7 @@ class RaceConditionMockTest {
     private lateinit var transferRepository: TransferRepository
     private lateinit var transferMetrics: TransferMetrics
     private lateinit var deadLetterService: DeadLetterService
+    private lateinit var lockService: com.danilo.banktransfer.infrastructure.service.LockService
     private lateinit var transferService: TransferService
 
     private val sourceAccountId = "ACC-001"
@@ -76,7 +77,12 @@ class RaceConditionMockTest {
         transferRepository = mockk()
         transferMetrics = mockk()
         deadLetterService = mockk()
-        transferService = TransferService(accountRepository, transferRepository, transferMetrics, deadLetterService, "accounts")
+        lockService = mockk()
+        
+        every { lockService.acquireTransferLocks(any(), any(), any()) } returns listOf("tf-001", "acc-001", "acc-002")
+        every { lockService.releaseLocks(any()) } just runs
+        
+        transferService = TransferService(accountRepository, transferRepository, transferMetrics, deadLetterService, lockService, "accounts")
 
         // Setup padrão de metrics
         every { transferMetrics.recordTransferProcessingTime(any()) } just runs

@@ -27,6 +27,7 @@ class TransferService(
     private val transferRepository: TransferRepository,
     private val transferMetrics: TransferMetrics,
     private val deadLetterService: com.danilo.banktransfer.infrastructure.service.DeadLetterService,
+    private val lockService: com.danilo.banktransfer.infrastructure.service.LockService,
     @Value("\${aws.dynamodb.table.accounts}")
     private val accountTableName: String
 ) {
@@ -46,7 +47,18 @@ class TransferService(
         val startTime = System.currentTimeMillis()
         logger.info("Processing transfer: ${event.transferId} from ${event.sourceAccountId} to ${event.destinationAccountId}")
 
+        // ACQUIRE LOCKS: Serialize concurrent access to prevent race conditions
+        var acquiredLocks: List<String>? = null
+        
         return try {
+            // 0. ACQUIRE DISTRIBUTED LOCKS (FIFO order)
+            acquiredLocks = lockService.acquireTransferLocks(
+                event.transferId,
+                event.sourceAccountId,
+                event.destinationAccountId
+            )
+            logger.info("🔒 All locks acquired for transfer ${event.transferId}")
+
             // 1. Check if transfer already processed (idempotency using Query on transferId)
             if (transferRepository.hasCompletedTransfer(event.transferId)) {
                 logger.warn("Transfer ${event.transferId} already processed (idempotent request)")
@@ -181,6 +193,13 @@ class TransferService(
                 )
             )
         } finally {
+            // RELEASE LOCKS in LIFO order (reverse order to prevent deadlock)
+            if (acquiredLocks != null && acquiredLocks.isNotEmpty()) {
+                logger.info("🔓 Releasing ${acquiredLocks.size} locks in LIFO order...")
+                lockService.releaseLocks(acquiredLocks)
+                logger.info("✅ All locks released for transfer ${event.transferId}")
+            }
+            
             // Clean up MDC context
             MDC.remove("transferId")
             MDC.remove("sourceAccountId")

@@ -33,6 +33,7 @@ class TransferServiceTest {
     private lateinit var transferRepository: TransferRepository
     private lateinit var transferMetrics: TransferMetrics
     private lateinit var deadLetterService: DeadLetterService
+    private lateinit var lockService: com.danilo.banktransfer.infrastructure.service.LockService
     private lateinit var transferService: TransferService
     
     private val sourceAccount = Account(
@@ -68,7 +69,13 @@ class TransferServiceTest {
         transferRepository = mockk()
         transferMetrics = mockk()
         deadLetterService = mockk()
-        transferService = TransferService(accountRepository, transferRepository, transferMetrics, deadLetterService, "accounts")
+        lockService = mockk()
+        
+        // Mock lock acquisition (returns list of acquired lock keys)
+        every { lockService.acquireTransferLocks(any(), any(), any()) } returns listOf("tf-001", "acc-001", "acc-002")
+        every { lockService.releaseLocks(any()) } just runs
+        
+        transferService = TransferService(accountRepository, transferRepository, transferMetrics, deadLetterService, lockService, "accounts")
     }
     
     @Test
