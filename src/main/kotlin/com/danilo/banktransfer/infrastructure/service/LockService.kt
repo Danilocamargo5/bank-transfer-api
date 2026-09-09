@@ -11,8 +11,8 @@ import software.amazon.awssdk.services.dynamodb.model.BillingMode
 import software.amazon.awssdk.services.dynamodb.model.AttributeDefinition
 import software.amazon.awssdk.services.dynamodb.model.KeySchemaElement
 import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException
-import software.amazon.awslabs.dynamodb.lock.client.AmazonDynamoDBLockClient
-import software.amazon.awslabs.dynamodb.lock.client.LockConfiguration
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClient
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClientOptions
 import java.util.concurrent.TimeUnit
 
 /**
