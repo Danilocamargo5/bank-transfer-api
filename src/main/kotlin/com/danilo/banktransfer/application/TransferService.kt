@@ -16,6 +16,7 @@ import com.danilo.banktransfer.infrastructure.repository.AccountRepository
 import com.danilo.banktransfer.infrastructure.repository.TransferRepository
 import com.danilo.banktransfer.infrastructure.metrics.TransferMetrics
 import org.slf4j.LoggerFactory
+import org.slf4j.MDC
 import org.springframework.stereotype.Service
 import java.time.Instant
 
@@ -34,6 +35,11 @@ class TransferService(
     }
 
     fun processTransfer(event: TransferRequestedEvent): Result {
+        // MDC: Add transferId to all logs in this context
+        MDC.put("transferId", event.transferId)
+        MDC.put("sourceAccountId", event.sourceAccountId)
+        MDC.put("destinationAccountId", event.destinationAccountId)
+        
         val startTime = System.currentTimeMillis()
         logger.info("Processing transfer: ${event.transferId} from ${event.sourceAccountId} to ${event.destinationAccountId}")
 
@@ -174,6 +180,11 @@ class TransferService(
                     failedAt = Instant.now()
                 )
             )
+        } finally {
+            // Clean up MDC context
+            MDC.remove("transferId")
+            MDC.remove("sourceAccountId")
+            MDC.remove("destinationAccountId")
         }
     }
 

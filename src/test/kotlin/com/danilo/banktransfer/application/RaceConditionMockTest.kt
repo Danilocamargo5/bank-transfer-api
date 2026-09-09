@@ -255,4 +255,112 @@ class RaceConditionMockTest {
         assertEquals(1, successCount.get(), "✅ COM LOCKS: Apenas 1 deve passar")
         assertEquals(1, failureCount.get(), "✅ COM LOCKS: 1 deve ser bloqueada como duplicada")
     }
-}
+
+    /**
+     * TESTE 3: Validação de Saldo (não pode ficar negativo)
+     */
+    @Test
+    fun `deve validar saldo antes de processar - sem permitir negativo`() {
+        println("\n╔════════════════════════════════════════════════════╗")
+        println("║  TESTE 3: Validação de Saldo Insuficiente         ║")
+        println("╚════════════════════════════════════════════════════╝")
+
+        val poorAccount = sourceAccount.copy(balance = BigDecimal("50.00"))
+        val successCount = AtomicInteger(0)
+        val failureCount = AtomicInteger(0)
+
+        every { transferRepository.hasCompletedTransfer(any()) } returns false
+        every { accountRepository.findById(sourceAccountId) } returns Optional.of(poorAccount)
+        every { accountRepository.findById(destAccountId) } returns Optional.of(destAccount)
+        every { transferRepository.save(any()) } returns mockk<Transfer>()
+
+        val event = TransferRequestedEvent(
+            transferId = "TEST-BALANCE-001",
+            sourceAccountId = sourceAccountId,
+            destinationAccountId = destAccountId,
+            amount = BigDecimal("100.00"),  // Maior que saldo!
+            currency = "BRL",
+            requestedAt = Instant.now()
+        )
+
+        val result = transferService.processTransfer(event)
+
+        if (result is TransferService.Result.Success) {
+            successCount.incrementAndGet()
+        } else {
+            failureCount.incrementAndGet()
+            println("✅ Corretamente bloqueada: saldo insuficiente")
+        }
+
+        assertEquals(1, failureCount.get(), "Deve bloquear transferência com saldo insuficiente")
+    }
+
+    /**
+     * TESTE 4: Conta Inativa (não pode transferir de/para contas inativas)
+     */
+    @Test
+    fun `deve bloquear transferencia de conta inativa`() {
+        println("\n╔════════════════════════════════════════════════════╗")
+        println("║  TESTE 4: Conta Inativa                            ║")
+        println("╚════════════════════════════════════════════════════╝")
+
+        val inactiveAccount = sourceAccount.copy(status = AccountStatus.INACTIVE)
+        val failureCount = AtomicInteger(0)
+
+        every { transferRepository.hasCompletedTransfer(any()) } returns false
+        every { accountRepository.findById(sourceAccountId) } returns Optional.of(inactiveAccount)
+        every { accountRepository.findById(destAccountId) } returns Optional.of(destAccount)
+        every { transferRepository.save(any()) } returns mockk<Transfer>()
+
+        val event = TransferRequestedEvent(
+            transferId = "TEST-INACTIVE-001",
+            sourceAccountId = sourceAccountId,
+            destinationAccountId = destAccountId,
+            amount = BigDecimal("100.00"),
+            currency = "BRL",
+            requestedAt = Instant.now()
+        )
+
+        val result = transferService.processTransfer(event)
+
+        if (result is TransferService.Result.Failure) {
+            failureCount.incrementAndGet()
+            println("✅ Corretamente bloqueada: conta inativa")
+        }
+
+        assertEquals(1, failureCount.get(), "Deve bloquear transferência de conta inativa")
+    }
+
+    /**
+     * TESTE 5: Conta Não Encontrada
+     */
+    @Test
+    fun `deve bloquear transferencia se conta nao existir`() {
+        println("\n╔════════════════════════════════════════════════════╗")
+        println("║  TESTE 5: Conta Não Encontrada                    ║")
+        println("╚════════════════════════════════════════════════════╝")
+
+        val failureCount = AtomicInteger(0)
+
+        every { transferRepository.hasCompletedTransfer(any()) } returns false
+        every { accountRepository.findById(sourceAccountId) } returns Optional.empty()  // Conta não existe!
+        every { transferRepository.save(any()) } returns mockk<Transfer>()
+
+        val event = TransferRequestedEvent(
+            transferId = "TEST-NOT-FOUND-001",
+            sourceAccountId = sourceAccountId,
+            destinationAccountId = destAccountId,
+            amount = BigDecimal("100.00"),
+            currency = "BRL",
+            requestedAt = Instant.now()
+        )
+
+        val result = transferService.processTransfer(event)
+
+        if (result is TransferService.Result.Failure) {
+            failureCount.incrementAndGet()
+            println("✅ Corretamente bloqueada: conta não encontrada")
+        }
+
+        assertEquals(1, failureCount.get(), "Deve bloquear se conta não existir")
+    }

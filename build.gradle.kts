@@ -42,6 +42,7 @@ dependencies {
 	
 	// Logging
 	implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")
+	implementation("net.logstash.logback:logstash-logback-encoder:7.4")
 	
 	// Metrics
 	implementation("io.micrometer:micrometer-core")

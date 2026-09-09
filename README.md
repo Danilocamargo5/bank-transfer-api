@@ -270,6 +270,34 @@ src/main/kotlin/com/danilo/banktransfer/
 
 **DLQ Routing:** Critical failures sent via `DeadLetterService` to SQS
 
+## Tempo Investido
+
+Desenvolvimento deste projeto foi realizado em aproximadamente:
+
+| Atividade | Tempo |
+|-----------|-------|
+| **Análise e Design** | 2h |
+| **Implementação - Core** | 8h |
+| **Testes Unitários** | 3h |
+| **Integração e Configuração** | 2h |
+| **Melhorias (MDC, JSON Logs, etc)** | 1h |
+| **Documentação** | 1.5h |
+| **Apresentação e Revisão** | 1.5h |
+| **TOTAL** | **19.5h** |
+
+### Breakdown por Componente:
+
+- **TransferService** (retry logic + DLQ): 4h
+- **DynamoDB Integration** (atomicidade): 2.5h
+- **Kafka Consumer** (manual ACK): 1.5h
+- **Testes (99 casos)**: 3h
+- **Infrastructure** (LocalStack setup): 2h
+- **Observabilidade** (Metrics + Logs): 1h
+- **Documentação**: 2h
+- **Outros**: 2h
+
+---
+
 ## License
 
 Internal use only.
