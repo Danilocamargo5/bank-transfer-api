@@ -104,7 +104,7 @@ class RaceConditionMockTest {
         every { transferRepository.hasCompletedTransfer(transferId) } returns false
         every { accountRepository.findById(sourceAccountId) } returns Optional.of(sourceAccount)
         every { accountRepository.findById(destAccountId) } returns Optional.of(destAccount)
-        every { accountRepository.saveAtomically(any(), any()) } just runs
+        every { transferRepository.saveTransferWithAccountsAtomically(any(), any(), any(), any()) } just runs
         every { transferRepository.save(any()) } returns mockk<Transfer>()
 
         // Thread 1: Processa normalmente
@@ -190,7 +190,7 @@ class RaceConditionMockTest {
 
         every { accountRepository.findById(sourceAccountId) } returns Optional.of(sourceAccount)
         every { accountRepository.findById(destAccountId) } returns Optional.of(destAccount)
-        every { accountRepository.saveAtomically(any(), any()) } just runs
+        every { transferRepository.saveTransferWithAccountsAtomically(any(), any(), any(), any()) } just runs
         every { transferRepository.save(any()) } returns mockk<Transfer>()
 
         // Thread 1: Processa e marca como COMPLETED

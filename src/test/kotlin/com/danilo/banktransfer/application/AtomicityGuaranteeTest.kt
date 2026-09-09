@@ -89,8 +89,7 @@ class AtomicityGuaranteeTest {
         every { transferRepository.hasCompletedTransfer(transferEvent.transferId) } returns false
         every { accountRepository.findById("acc-João-001") } returns Optional.of(sourceAccount)
         every { accountRepository.findById("acc-Maria-002") } returns Optional.of(destinationAccount)
-        every { accountRepository.saveAtomically(any(), any()) } just runs
-        every { transferRepository.save(any()) } returns mockk()
+        every { transferRepository.saveTransferWithAccountsAtomically(any(), any(), any(), any()) } just runs
         every { transferMetrics.recordTransferProcessingTime(any()) } just runs
         every { transferMetrics.recordTransferSuccess() } just runs
         
@@ -121,9 +120,8 @@ class AtomicityGuaranteeTest {
         every { transferRepository.hasCompletedTransfer(transferEvent.transferId) } returns false
         every { accountRepository.findById("acc-João-001") } returns Optional.of(sourceAccount)
         every { accountRepository.findById("acc-Maria-002") } returns Optional.of(destinationAccount)
-        every { accountRepository.saveAtomically(any(), any()) } 
+        every { transferRepository.saveTransferWithAccountsAtomically(any(), any(), any(), any()) } 
             .throws(RuntimeException("DynamoDB: Transaction failed on credit"))
-        every { transferRepository.save(any()) } returns mockk()
         every { transferMetrics.recordTransferProcessingTime(any()) } just runs
         every { transferMetrics.recordTransferFailure(any()) } just runs
         
@@ -154,9 +152,8 @@ class AtomicityGuaranteeTest {
         every { transferRepository.hasCompletedTransfer(transferEvent.transferId) } returns false
         every { accountRepository.findById("acc-João-001") } returns Optional.of(sourceAccount)
         every { accountRepository.findById("acc-Maria-002") } returns Optional.of(destinationAccount)
-        every { accountRepository.saveAtomically(any(), any()) } 
+        every { transferRepository.saveTransferWithAccountsAtomically(any(), any(), any(), any()) } 
             .throws(RuntimeException("DynamoDB: Debit validation failed"))
-        every { transferRepository.save(any()) } returns mockk()
         every { transferMetrics.recordTransferProcessingTime(any()) } just runs
         every { transferMetrics.recordTransferFailure(any()) } just runs
         
@@ -185,11 +182,10 @@ class AtomicityGuaranteeTest {
         every { accountRepository.findById("acc-João-001") } returns Optional.of(sourceAccount)
         every { accountRepository.findById("acc-Maria-002") } returns Optional.of(destinationAccount)
         
-        every { accountRepository.saveAtomically(any(), any()) } 
+        every { transferRepository.saveTransferWithAccountsAtomically(any(), any(), any(), any()) } 
             .throws(RuntimeException("Network timeout - transient"))
             .andThen { Unit }
         
-        every { transferRepository.save(any()) } returns mockk()
         every { transferMetrics.recordTransferProcessingTime(any()) } just runs
         every { transferMetrics.recordTransferSuccess() } just runs
         
@@ -216,9 +212,8 @@ class AtomicityGuaranteeTest {
         every { transferRepository.hasCompletedTransfer(transferEvent.transferId) } returns false
         every { accountRepository.findById("acc-João-001") } returns Optional.of(sourceAccount)
         every { accountRepository.findById("acc-Maria-002") } returns Optional.of(destinationAccount)
-        every { accountRepository.saveAtomically(any(), any()) } 
+        every { transferRepository.saveTransferWithAccountsAtomically(any(), any(), any(), any()) } 
             .throws(RuntimeException("DynamoDB: Account validation failed"))
-        every { transferRepository.save(any()) } returns mockk()
         every { transferMetrics.recordTransferProcessingTime(any()) } just runs
         every { transferMetrics.recordTransferFailure(any()) } just runs
         
