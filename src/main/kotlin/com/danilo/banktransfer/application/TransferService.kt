@@ -17,6 +17,7 @@ import com.danilo.banktransfer.infrastructure.repository.TransferRepository
 import com.danilo.banktransfer.infrastructure.metrics.TransferMetrics
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.time.Instant
 
@@ -25,7 +26,9 @@ class TransferService(
     private val accountRepository: AccountRepository,
     private val transferRepository: TransferRepository,
     private val transferMetrics: TransferMetrics,
-    private val deadLetterService: com.danilo.banktransfer.infrastructure.service.DeadLetterService
+    private val deadLetterService: com.danilo.banktransfer.infrastructure.service.DeadLetterService,
+    @Value("\${aws.dynamodb.table.accounts}")
+    private val accountTableName: String
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
     
@@ -210,7 +213,7 @@ class TransferService(
                     sourceAccount,
                     destinationAccount,
                     transfer,
-                    "account"  // accountTableName
+                    accountTableName  // Use injected table name
                 )
                 
                 logger.info("Successfully saved transfer and accounts atomically for transfer $transferId on attempt $attempt")
