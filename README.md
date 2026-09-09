@@ -41,40 +41,15 @@ External Sources (Scripts)
 
 ## Key Features
 
-### 1. Idempotency Guarantee
-- Every transfer has a unique `transferId`
-- System detects and rejects duplicate processing
-- Prevents accidental double-charging
-- Implemented at TransferService level
-
-### 2. Atomicity with Rollback
-- Both accounts must be updated together (all-or-nothing)
-- If any save fails, both are rolled back to original state
-- Prevents partial updates leaving system inconsistent
-
-### 3. Retry with Exponential Backoff
-- 3 automatic retry attempts with 100ms, 200ms, 400ms delays
-- Recovers from transient failures (network glitches, temporary unavailability)
-- If all retries fail → system rolls back and sends to DLQ
-
-### 4. Manual Kafka Acknowledgment
-- Configuration: `enable-auto-commit=false`
-- Offset only advances when transfer completes successfully
-- If app crashes mid-processing, message is reprocessed on restart
-- Prevents message loss
-
-### 5. Dead Letter Queue (DLQ)
-- Critical failures sent to SQS for manual investigation
-- Separate tracking for:
-  - Data inconsistencies (save + rollback failed)
-  - Malformed Kafka messages (poison messages)
-  - Unrecoverable errors
-- Ops team can investigate and retry manually
-
-### 6. Comprehensive Validation
-- API level: format validation (TransferValidator)
-- Service level: business rules validation (TransferService)
-- Database level: entity constraints
+- **Distributed Locking:** Prevents race conditions with DynamoDB atomic locks
+- **Unified Transactions:** Single DynamoDB transaction for accounts + transfer (all-or-nothing)
+- **Idempotency:** No duplicate processing with transferId checks
+- **Retry Logic:** 3 attempts with exponential backoff (100ms, 200ms, 400ms)
+- **Manual Kafka ACK:** Only advances offset on successful processing
+- **Dead Letter Queue:** Critical failures sent to SQS for investigation
+- **MDC Logging:** Request tracing with transferId correlation
+- **JSON Logs:** Structured logging for production
+- **Validation:** API, service, and database level checks
 
 ## API Endpoints
 
@@ -179,13 +154,12 @@ http://localhost:8081
 ./gradlew test
 ```
 
-**Test Coverage:**
-- 32 tests total, 100% passing
-- Controller: 8 tests
-- Service: 5 tests  
-- Validator: 11 tests
-- Integration: 3 tests
-- Messaging: 5 tests
+**Current Status:** 101/104 tests passing
+- Atomic Transactions: ✅ 5 tests
+- Race Condition Prevention: ✅ 7 tests
+- Validation: ✅ 5 tests
+- Service Logic: ✅ 25+ tests
+- Integration: ⏳ Requires running infrastructure
 
 ## Validation Rules
 
@@ -221,10 +195,11 @@ http://localhost:8081
 
 ## Production Features
 
-✅ **Atomicity** - All-or-nothing account updates  
+✅ **Distributed Locking** - Prevents race conditions
+✅ **Unified Transactions** - All-or-nothing atomicity  
 ✅ **Idempotency** - No duplicate processing  
 ✅ **Resilience** - Retry with exponential backoff  
-✅ **Observability** - Metrics, health checks, logs  
+✅ **Observability** - MDC logging + JSON structured logs
 ✅ **Auditability** - Complete transfer history  
 ✅ **Recoverability** - DLQ for manual intervention  
 
@@ -260,41 +235,45 @@ src/main/kotlin/com/danilo/banktransfer/
 
 ### Key Implementation Details
 
-**Idempotency:** Checked via `transferRepository.hasCompletedTransfer(transferId)`
+**Distributed Locking:** `LockService.kt` uses PutItem + ConditionExpression for atomic lock acquisition
 
-**Atomicity:** Implemented with retry + rollback in `saveAccountsWithRetryAndRollback()`
+**Unified Transactions:** `TransferRepository.saveTransferWithAccountsAtomically()` writes 3 items in one transaction
 
-**Manual ACK:** Set `spring.kafka.consumer.enable-auto-commit=false`
+**Idempotency:** `transferRepository.hasCompletedTransfer(transferId)` checked within lock
 
-**Retry Strategy:** 3 attempts with 100ms, 200ms, 400ms exponential backoff
+**Retry Strategy:** 3 attempts with exponential backoff in `saveTransferWithAccountsAtomically()`
 
-**DLQ Routing:** Critical failures sent via `DeadLetterService` to SQS
+**DLQ Routing:** `DeadLetterService` sends critical failures to SQS after retries exhausted
+
+**Logging:** MDC context with transferId + JSON structured output via logback-spring.xml
 
 ## Tempo Investido
 
-Desenvolvimento deste projeto foi realizado em aproximadamente:
+Total de desenvolvimento (Sessões 1-14):
 
 | Atividade | Tempo |
 |-----------|-------|
-| **Análise e Design** | 2h |
-| **Implementação - Core** | 8h |
-| **Testes Unitários** | 3h |
-| **Integração e Configuração** | 2h |
-| **Melhorias (MDC, JSON Logs, etc)** | 1h |
-| **Documentação** | 1.5h |
-| **Apresentação e Revisão** | 1.5h |
-| **TOTAL** | **19.5h** |
+| Análise e Design | 2h |
+| Core Implementation | 8h |
+| Testes Unitários | 3h |
+| Integração e Configuração | 2h |
+| Transação Unificada | 2h |
+| Distributed Locking | 2h |
+| MDC + JSON Logging | 1h |
+| Documentação | 2h |
+| Apresentação e Review | 2h |
+| **TOTAL** | **24.5h** |
 
-### Breakdown por Componente:
+### Principais Componentes:
 
-- **TransferService** (retry logic + DLQ): 4h
-- **DynamoDB Integration** (atomicidade): 2.5h
-- **Kafka Consumer** (manual ACK): 1.5h
-- **Testes (99 casos)**: 3h
-- **Infrastructure** (LocalStack setup): 2h
-- **Observabilidade** (Metrics + Logs): 1h
-- **Documentação**: 2h
-- **Outros**: 2h
+- TransferService (retry + locking): 6h
+- LockService (distributed locks): 3h
+- DynamoDB Integration: 3h
+- Testes (104 casos): 4h
+- Infrastructure (LocalStack): 2h
+- Logging e Observabilidade: 2h
+- Documentação: 2h
+- Outros: 2.5h
 
 ---
 
