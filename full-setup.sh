@@ -68,10 +68,8 @@ success "DynamoDB tables created and populated!"
 
 sleep 2
 
-# Step 5: Publish test messages
-info "STEP 6: Publishing 30 test messages to Kafka..."
-"$SCRIPTS_DIR/DEMO.sh"
-success "Test messages published!"
+# Step 6: Setup complete
+info "STEP 6: All infrastructure initialized!"
 
 echo ""
 echo "=========================================="
@@ -116,10 +114,16 @@ else
 fi
 
 echo ""
-echo "🧪 TEST THE APP:"
-echo "   curl http://localhost:8080/actuator/health"
-echo "   ./scripts/DEMO.sh  (30 test messages)"
-echo "   ./scripts/DEMO2.sh (additional tests)"
+echo "=================================="
+echo "🚀 NEXT STEPS:"
+echo "=================================="
+echo ""
+echo "TERMINAL 1 (Run the App):"
+echo "  ./scripts/start-app.sh"
+echo ""
+echo "TERMINAL 2 (Run Tests - optional):"
+echo "  ./scripts/DEMO.sh    (30 test messages)"
+echo "  ./scripts/DEMO2.sh   (additional tests)"
 echo ""
 echo "=================================="
 echo "🔄 RESET & START OVER:"
