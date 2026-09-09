@@ -6,8 +6,7 @@ import com.danilo.banktransfer.domain.enums.AccountStatus
 import com.danilo.banktransfer.domain.enums.Currency
 import com.danilo.banktransfer.domain.model.Account
 import com.danilo.banktransfer.domain.model.TransferRequestedEvent
-import com.danilo.banktransfer.infrastructure.persistence.repository.AccountRepository
-import com.danilo.banktransfer.infrastructure.persistence.repository.TransferRepository
+import com.danilo.banktransfer.infrastructure.repository.AccountRepository
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -28,9 +27,6 @@ class RaceConditionTransferTest {
 
     @Autowired
     private lateinit var accountRepository: AccountRepository
-
-    @Autowired
-    private lateinit var transferRepository: TransferRepository
 
     private val sourceAccountId = "ACC-SOURCE-001"
     private val destAccountId = "ACC-DEST-001"
@@ -199,8 +195,8 @@ class RaceConditionTransferTest {
         )
 
         // Verifica saldo final (prova que foi atômico)
-        val sourceAccountFinal = accountRepository.findByAccountId(sourceAccountId)
-        val destAccountFinal = accountRepository.findByAccountId(destAccountId)
+        val sourceAccountFinal = accountRepository.findById(sourceAccountId).orElse(null)
+        val destAccountFinal = accountRepository.findById(destAccountId).orElse(null)
 
         assertEquals(
             0,
@@ -301,13 +297,13 @@ class RaceConditionTransferTest {
         assertEquals(0, exceptions.size, "Nenhuma exceção")
 
         // Verifica saldos
-        val sourceFinal = accountRepository.findByAccountId(sourceAccountId)
+        val sourceFinal = accountRepository.findById(sourceAccountId).orElse(null)
         assertEquals(0, sourceFinal?.balance?.compareTo(BigDecimal("900.00")), "Origem: 1000 - 50 - 50 = 900")
 
-        val dest1Final = accountRepository.findByAccountId(destAccountId)
+        val dest1Final = accountRepository.findById(destAccountId).orElse(null)
         assertEquals(0, dest1Final?.balance?.compareTo(BigDecimal("50.00")), "Dest 1: 0 + 50 = 50")
 
-        val dest2Final = accountRepository.findByAccountId(destAccount2)
+        val dest2Final = accountRepository.findById(destAccount2).orElse(null)
         assertEquals(0, dest2Final?.balance?.compareTo(BigDecimal("50.00")), "Dest 2: 0 + 50 = 50")
 
         println("✅ TESTE PASSOU: Ambas transferências processadas corretamente!")
