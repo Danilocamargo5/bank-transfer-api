@@ -84,8 +84,8 @@ class ConcurrentTransferTest {
         )
     }
 
-    @Test
     @Disabled("WIP: Real concurrency test - timing issues in test environment. Atomicity and locking are validated by other tests (104 passing)")
+    @Test
     fun `concurrent transfers to same account should maintain atomicity and correct balances`() {
         println("\n╔════════════════════════════════════════════════════╗")
         println("║  CONCURRENT TRANSFER TEST                          ║")
