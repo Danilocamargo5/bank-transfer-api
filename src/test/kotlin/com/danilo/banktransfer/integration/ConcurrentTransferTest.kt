@@ -9,7 +9,6 @@ import com.danilo.banktransfer.infrastructure.repository.AccountRepository
 import com.danilo.banktransfer.infrastructure.repository.TransferRepository
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Disabled
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
@@ -84,7 +83,6 @@ class ConcurrentTransferTest {
         )
     }
 
-    @Disabled("Real concurrency test - timing issues in test environment. Atomicity proven by RaceConditionMockTest + AtomicityGuaranteeTest (104 tests passing)")
     @Test
     fun `concurrent transfers to same account should maintain atomicity and correct balances`() {
         println("\n╔════════════════════════════════════════════════════╗")
@@ -96,11 +94,17 @@ class ConcurrentTransferTest {
 
         val successCount = AtomicInteger(0)
         val failureCount = AtomicInteger(0)
-        val latch = CountDownLatch(2)
+        val latchStart = CountDownLatch(2)  // Force both threads to wait at same point
+        val latchEnd = CountDownLatch(2)    // Main thread waits for both to finish
 
         // Thread 1: Transfer 100 from acc-001 to acc-003
         Thread {
             try {
+                // Wait for both threads to be ready
+                latchStart.countDown()
+                latchStart.await()
+                
+                println("🚀 Thread 1 STARTING...")
                 val event1 = TransferRequestedEvent(
                     transferId = "concurrent-tf-001",
                     sourceAccountId = "concurrent-acc-001",
@@ -121,13 +125,18 @@ class ConcurrentTransferTest {
                 failureCount.incrementAndGet()
                 println("❌ Thread 1: Exception: ${e.message}")
             } finally {
-                latch.countDown()
+                latchEnd.countDown()
             }
         }.start()
 
         // Thread 2: Transfer 50 from acc-002 to acc-003 (SIMULTANEOUSLY)
         Thread {
             try {
+                // Wait for both threads to be ready
+                latchStart.countDown()
+                latchStart.await()
+                
+                println("🚀 Thread 2 STARTING...")
                 val event2 = TransferRequestedEvent(
                     transferId = "concurrent-tf-002",
                     sourceAccountId = "concurrent-acc-002",
@@ -148,12 +157,12 @@ class ConcurrentTransferTest {
                 failureCount.incrementAndGet()
                 println("❌ Thread 2: Exception: ${e.message}")
             } finally {
-                latch.countDown()
+                latchEnd.countDown()
             }
         }.start()
 
-        // Wait for both threads
-        latch.await()
+        // Wait for both threads to finish
+        latchEnd.await()
 
         println("\n╔════════════════════════════════════════════════════╗")
         println("║                   RESULTS                          ║")
