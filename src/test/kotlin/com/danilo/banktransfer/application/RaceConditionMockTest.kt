@@ -105,6 +105,10 @@ class RaceConditionMockTest {
         val successCount = AtomicInteger(0)
         val latch = CountDownLatch(2)
 
+        // SIMULATE: Locks NÃO funcionam - ambas threads conseguem passar
+        every { lockService.acquireTransferLocks(any(), any(), any()) } returns listOf("tf-001", "acc-001", "acc-002")
+        every { lockService.releaseLocks(any()) } just runs
+        
         // MOCKK Setup: hasCompletedTransfer sempre retorna FALSE
         // Isso simula o bug - nenhuma thread sabe que a outra já passou
         every { transferRepository.hasCompletedTransfer(transferId) } returns false
@@ -187,6 +191,10 @@ class RaceConditionMockTest {
         val successCount = AtomicInteger(0)
         val failureCount = AtomicInteger(0)
         val latch = CountDownLatch(2)
+
+        // SIMULATE: AWS LockClient está funcionando
+        every { lockService.acquireTransferLocks(any(), any(), any()) } returns listOf("tf-001", "acc-001", "acc-002")
+        every { lockService.releaseLocks(any()) } just runs
 
         // MOCKK Setup: primeira chamada FALSE, segunda TRUE
         // (Simula: primeiro thread processa e marca como COMPLETED)
@@ -275,6 +283,8 @@ class RaceConditionMockTest {
         val successCount = AtomicInteger(0)
         val failureCount = AtomicInteger(0)
 
+        every { lockService.acquireTransferLocks(any(), any(), any()) } returns listOf("test", "acc1", "acc2")
+        every { lockService.releaseLocks(any()) } just runs
         every { transferRepository.hasCompletedTransfer(any()) } returns false
         every { accountRepository.findById(sourceAccountId) } returns Optional.of(poorAccount)
         every { accountRepository.findById(destAccountId) } returns Optional.of(destAccount)
@@ -313,6 +323,8 @@ class RaceConditionMockTest {
         val inactiveAccount = sourceAccount.copy(status = AccountStatus.INACTIVE)
         val failureCount = AtomicInteger(0)
 
+        every { lockService.acquireTransferLocks(any(), any(), any()) } returns listOf("test", "acc1", "acc2")
+        every { lockService.releaseLocks(any()) } just runs
         every { transferRepository.hasCompletedTransfer(any()) } returns false
         every { accountRepository.findById(sourceAccountId) } returns Optional.of(inactiveAccount)
         every { accountRepository.findById(destAccountId) } returns Optional.of(destAccount)
@@ -348,6 +360,8 @@ class RaceConditionMockTest {
 
         val failureCount = AtomicInteger(0)
 
+        every { lockService.acquireTransferLocks(any(), any(), any()) } returns listOf("test", "acc1", "acc2")
+        every { lockService.releaseLocks(any()) } just runs
         every { transferRepository.hasCompletedTransfer(any()) } returns false
         every { accountRepository.findById(sourceAccountId) } returns Optional.empty()  // Conta não existe!
         every { transferRepository.save(any()) } returns mockk<Transfer>()
