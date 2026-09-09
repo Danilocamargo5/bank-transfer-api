@@ -4,26 +4,23 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
-import software.amazon.awssdk.services.dynamodb.model.CreateTableRequest
-import software.amazon.awssdk.services.dynamodb.model.KeyType
-import software.amazon.awssdk.services.dynamodb.model.ScalarAttributeType
-import software.amazon.awssdk.services.dynamodb.model.BillingMode
-import software.amazon.awssdk.services.dynamodb.model.AttributeDefinition
-import software.amazon.awssdk.services.dynamodb.model.KeySchemaElement
-import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClient
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClientOptions
-import java.util.concurrent.TimeUnit
+import software.amazon.awssdk.services.dynamodb.model.PutItemRequest
+import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue
+import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException
+import java.time.Instant
 
 /**
- * LockService: Distributed locking using AWS DynamoDB LockClient
+ * LockService: Pure DynamoDB-based distributed locking
  * 
- * Purpose: Serialize concurrent access to resources (transfers)
- * Prevents race conditions where 2+ threads process the same transfer
+ * How it works:
+ * 1. To acquire lock: PutItem with ConditionExpression (only if NOT exists)
+ * 2. Lock TTL: 10 seconds (auto-cleanup if process crashes)
+ * 3. To release: DeleteItem
  * 
- * Lock Keys: transferId + sourceAccountId + destinationAccountId
- * Lock TTL: 10 seconds (auto-releases if process crashes)
- * Release Order: LIFO (reverse order to prevent deadlock)
+ * Lock serializes competing threads:
+ * - Thread 1: acquires lock → processes transfer → releases lock
+ * - Thread 2: waits/retries until lock is gone
  */
 @Service
 class LockService(
@@ -32,35 +29,13 @@ class LockService(
     private val lockTableName: String
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
-    private lateinit var lockClient: AmazonDynamoDBLockClient
-
-    init {
-        try {
-            // Ensure lock table exists
-            ensureLockTableExists()
-            
-            // Initialize LockClient
-            lockClient = AmazonDynamoDBLockClient.Builder(dynamoDbClient, lockTableName)
-                .withTimeUnit(TimeUnit.SECONDS)
-                .withLeaseDuration(10L)  // 10 second TTL
-                .withHeartbeatInterval(1L)  // Check every 1 second
-                .build()
-            
-            logger.info("LockService initialized with table: $lockTableName")
-        } catch (e: Exception) {
-            logger.error("Failed to initialize LockService", e)
-            throw e
-        }
-    }
+    private val lockTTL = 10L  // seconds
 
     /**
-     * Acquire 3 locks in order (to prevent circular deadlock):
-     * 1. transferId
-     * 2. sourceAccountId
-     * 3. destinationAccountId
+     * Acquire locks in order: transferId → sourceAccountId → destinationAccountId
      * 
-     * Returns: List of acquired locks (in order)
-     * IMPORTANT: Must be released in REVERSE order (LIFO)
+     * Uses ConditionExpression: "attribute_not_exists(lockId)"
+     * This ensures atomicity - lock either exists or doesn't
      */
     fun acquireTransferLocks(
         transferId: String,
@@ -72,84 +47,92 @@ class LockService(
 
         try {
             for (lockKey in lockKeys) {
-                logger.info("Acquiring lock for: $lockKey")
-                val lockConfig = LockConfiguration.builder(lockKey)
-                    .withTimeUnit(TimeUnit.SECONDS)
-                    .withLeaseDuration(10L)
-                    .withRetryInterval(100L)  // 100ms retry
-                    .withTimeoutInMillis(5000L)  // 5 second timeout
-                    .build()
+                logger.info("🔒 Attempting to acquire lock: $lockKey")
+                
+                // Try to acquire lock with retry
+                var acquired = false
+                for (attempt in 1..5) {
+                    try {
+                        acquireLock(lockKey)
+                        acquiredLocks.add(lockKey)
+                        logger.info("✅ Lock acquired: $lockKey (attempt $attempt)")
+                        acquired = true
+                        break
+                    } catch (e: ConditionalCheckFailedException) {
+                        if (attempt < 5) {
+                            logger.warn("Lock contention for $lockKey, retrying... (attempt $attempt/5)")
+                            Thread.sleep(100 * attempt.toLong())  // exponential backoff
+                        } else {
+                            throw e
+                        }
+                    }
+                }
 
-                val lock = lockClient.acquireLock(lockConfig)
-                acquiredLocks.add(lockKey)
-                logger.info("✅ Acquired lock for: $lockKey")
+                if (!acquired) {
+                    throw Exception("Could not acquire lock for $lockKey after 5 attempts")
+                }
             }
 
+            logger.info("🔐 All locks acquired! Holding: ${acquiredLocks.joinToString(", ")}")
             return acquiredLocks
         } catch (e: Exception) {
-            // Failed to acquire lock - release what we got
-            logger.warn("Failed to acquire lock at position ${acquiredLocks.size}: ${e.message}")
-            releaseLocks(acquiredLocks)  // LIFO order
+            logger.warn("Failed to acquire all locks at position ${acquiredLocks.size}, releasing...")
+            releaseLocks(acquiredLocks)
             throw e
         }
     }
 
     /**
+     * Try to acquire single lock atomically
+     * 
+     * PutItem + ConditionExpression:
+     * - Only succeeds if lockId does NOT exist
+     * - Fails with ConditionalCheckFailedException if lock already held
+     */
+    private fun acquireLock(lockKey: String) {
+        val expiryTime = (Instant.now().epochSecond + lockTTL).toString()
+
+        val putRequest = PutItemRequest.builder()
+            .tableName(lockTableName)
+            .item(
+                mapOf(
+                    "lockId" to AttributeValue.builder().s(lockKey).build(),
+                    "ownerId" to AttributeValue.builder().s("transfer-service").build(),
+                    "expiryTime" to AttributeValue.builder().n(expiryTime).build(),
+                    "acquiredAt" to AttributeValue.builder().s(Instant.now().toString()).build()
+                )
+            )
+            // CRITICAL: Only put if lock does NOT exist (atomicity!)
+            .conditionExpression("attribute_not_exists(lockId)")
+            .build()
+
+        dynamoDbClient.putItem(putRequest)
+    }
+
+    /**
      * Release locks in REVERSE order (LIFO)
      * This prevents deadlock in distributed systems
-     * 
-     * Example: If acquired [A, B, C], release in order [C, B, A]
      */
     fun releaseLocks(locks: List<String>) {
-        // Reverse order (LIFO)
         locks.reversed().forEach { lockKey ->
             try {
-                lockClient.releaseLock(LockConfiguration.builder(lockKey).build())
-                logger.info("✅ Released lock for: $lockKey")
+                releaseLock(lockKey)
             } catch (e: Exception) {
-                logger.warn("Failed to release lock for $lockKey: ${e.message}")
+                logger.warn("Failed to release lock $lockKey: ${e.message}")
             }
         }
     }
 
     /**
-     * Ensure lock table exists in DynamoDB
-     * Creates if missing (for LocalStack/testing)
+     * Release single lock by deleting it
      */
-    private fun ensureLockTableExists() {
-        try {
-            dynamoDbClient.describeTable { it.tableName(lockTableName) }
-            logger.info("Lock table $lockTableName already exists")
-        } catch (e: ResourceNotFoundException) {
-            logger.info("Lock table $lockTableName not found, creating...")
-            createLockTable()
-        }
-    }
-
-    /**
-     * Create lock table with simple schema:
-     * - PK: lockId (String)
-     * - Billing: PAY_PER_REQUEST (on-demand)
-     */
-    private fun createLockTable() {
-        val createTableRequest = CreateTableRequest.builder()
+    private fun releaseLock(lockKey: String) {
+        val deleteRequest = DeleteItemRequest.builder()
             .tableName(lockTableName)
-            .keySchema(
-                KeySchemaElement.builder()
-                    .attributeName("lockId")
-                    .keyType(KeyType.HASH)
-                    .build()
-            )
-            .attributeDefinitions(
-                AttributeDefinition.builder()
-                    .attributeName("lockId")
-                    .attributeType(ScalarAttributeType.S)
-                    .build()
-            )
-            .billingMode(BillingMode.PAY_PER_REQUEST)
+            .key(mapOf("lockId" to AttributeValue.builder().s(lockKey).build()))
             .build()
 
-        dynamoDbClient.createTable(createTableRequest)
-        logger.info("✅ Created lock table: $lockTableName")
+        dynamoDbClient.deleteItem(deleteRequest)
+        logger.info("🔓 Lock released: $lockKey")
     }
 }
