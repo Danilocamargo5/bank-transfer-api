@@ -98,7 +98,7 @@ class AtomicityGuaranteeTest {
         
         // Then
         assertTrue(result is TransferService.Result.Success)
-        verify(exactly = 1) { accountRepository.saveAtomically(any(), any()) }
+        verify(exactly = 1) { transferRepository.saveTransferWithAccountsAtomically(any(), any(), any(), any()) }
     }
     
     /**
@@ -130,7 +130,7 @@ class AtomicityGuaranteeTest {
         
         // Then - Transaction failed
         assertTrue(result is TransferService.Result.Failure)
-        verify(exactly = 3) { accountRepository.saveAtomically(any(), any()) }
+        verify(exactly = 3) { transferRepository.saveTransferWithAccountsAtomically(any(), any(), any(), any()) }
     }
     
     /**
@@ -162,7 +162,7 @@ class AtomicityGuaranteeTest {
         
         // Then
         assertTrue(result is TransferService.Result.Failure)
-        verify(exactly = 3) { accountRepository.saveAtomically(any(), any()) }
+        verify(exactly = 3) { transferRepository.saveTransferWithAccountsAtomically(any(), any(), any(), any()) }
     }
     
     /**
@@ -194,7 +194,7 @@ class AtomicityGuaranteeTest {
         
         // Then - Success despite retry necessary
         assertTrue(result is TransferService.Result.Success)
-        verify(exactly = 2) { accountRepository.saveAtomically(any(), any()) }
+        verify(exactly = 2) { transferRepository.saveTransferWithAccountsAtomically(any(), any(), any(), any()) }
     }
     
     /**
@@ -222,7 +222,7 @@ class AtomicityGuaranteeTest {
         
         // Then
         assertTrue(result is TransferService.Result.Failure)
-        verify(exactly = 3) { accountRepository.saveAtomically(any(), any()) }
+        verify(exactly = 3) { transferRepository.saveTransferWithAccountsAtomically(any(), any(), any(), any()) }
     }
     
     /**
