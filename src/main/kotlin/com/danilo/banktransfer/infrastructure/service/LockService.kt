@@ -6,8 +6,16 @@ import org.springframework.stereotype.Service
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest
 import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest
+import software.amazon.awssdk.services.dynamodb.model.DescribeTableRequest
+import software.amazon.awssdk.services.dynamodb.model.CreateTableRequest
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException
+import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException
+import software.amazon.awssdk.services.dynamodb.model.KeySchemaElement
+import software.amazon.awssdk.services.dynamodb.model.AttributeDefinition
+import software.amazon.awssdk.services.dynamodb.model.KeyType
+import software.amazon.awssdk.services.dynamodb.model.ScalarAttributeType
+import software.amazon.awssdk.services.dynamodb.model.BillingMode
 import java.time.Instant
 
 /**
@@ -30,6 +38,54 @@ class LockService(
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val lockTTL = 10L  // seconds
+
+    init {
+        try {
+            ensureLockTableExists()
+            logger.info("✅ LockService initialized. Lock table: $lockTableName")
+        } catch (e: Exception) {
+            logger.error("Failed to initialize LockService", e)
+            throw e
+        }
+    }
+
+    /**
+     * Ensure lock table exists, create if missing
+     */
+    private fun ensureLockTableExists() {
+        try {
+            dynamoDbClient.describeTable { it.tableName(lockTableName) }
+            logger.info("Lock table exists: $lockTableName")
+        } catch (e: ResourceNotFoundException) {
+            logger.info("Lock table not found, creating: $lockTableName")
+            createLockTable()
+        }
+    }
+
+    /**
+     * Create lock table with simple schema
+     */
+    private fun createLockTable() {
+        val createRequest = CreateTableRequest.builder()
+            .tableName(lockTableName)
+            .keySchema(
+                KeySchemaElement.builder()
+                    .attributeName("lockId")
+                    .keyType(KeyType.HASH)
+                    .build()
+            )
+            .attributeDefinitions(
+                AttributeDefinition.builder()
+                    .attributeName("lockId")
+                    .attributeType(ScalarAttributeType.S)
+                    .build()
+            )
+            .billingMode(BillingMode.PAY_PER_REQUEST)
+            .build()
+
+        dynamoDbClient.createTable(createRequest)
+        logger.info("✅ Created lock table: $lockTableName")
+    }
 
     /**
      * Acquire locks in order: transferId → sourceAccountId → destinationAccountId
