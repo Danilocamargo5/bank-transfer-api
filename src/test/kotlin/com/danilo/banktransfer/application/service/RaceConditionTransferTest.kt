@@ -13,11 +13,11 @@ import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.TestPropertySource
+import org.junit.jupiter.api.Assertions.assertEquals
 import java.math.BigDecimal
 import java.time.Instant
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.test.assertEquals
 
 @SpringBootTest
 @TestPropertySource(locations = ["classpath:application-test.properties"])
@@ -203,13 +203,13 @@ class RaceConditionTransferTest {
         val destAccountFinal = accountRepository.findByAccountId(destAccountId)
 
         assertEquals(
-            BigDecimal("900.00"),
-            sourceAccountFinal?.balance,
+            0,
+            sourceAccountFinal?.balance?.compareTo(BigDecimal("900.00")),
             "❌ FALHA: Saldo de origem incorreto (race condition afetou atomicidade!)"
         )
         assertEquals(
-            BigDecimal("100.00"),
-            destAccountFinal?.balance,
+            0,
+            destAccountFinal?.balance?.compareTo(BigDecimal("100.00")),
             "❌ FALHA: Saldo de destino incorreto (race condition afetou atomicidade!)"
         )
 
@@ -302,13 +302,13 @@ class RaceConditionTransferTest {
 
         // Verifica saldos
         val sourceFinal = accountRepository.findByAccountId(sourceAccountId)
-        assertEquals(BigDecimal("900.00"), sourceFinal?.balance, "Origem: 1000 - 50 - 50 = 900")
+        assertEquals(0, sourceFinal?.balance?.compareTo(BigDecimal("900.00")), "Origem: 1000 - 50 - 50 = 900")
 
         val dest1Final = accountRepository.findByAccountId(destAccountId)
-        assertEquals(BigDecimal("50.00"), dest1Final?.balance, "Dest 1: 0 + 50 = 50")
+        assertEquals(0, dest1Final?.balance?.compareTo(BigDecimal("50.00")), "Dest 1: 0 + 50 = 50")
 
         val dest2Final = accountRepository.findByAccountId(destAccount2)
-        assertEquals(BigDecimal("50.00"), dest2Final?.balance, "Dest 2: 0 + 50 = 50")
+        assertEquals(0, dest2Final?.balance?.compareTo(BigDecimal("50.00")), "Dest 2: 0 + 50 = 50")
 
         println("✅ TESTE PASSOU: Ambas transferências processadas corretamente!")
     }
